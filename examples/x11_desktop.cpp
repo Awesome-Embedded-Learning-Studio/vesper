@@ -47,7 +47,7 @@ int main() {
                     visor::ui::kLightTheme};
     visor::ui::Label words{PointI{0, 0}, "HELLO FROM VESPER", vesper::fonts::kDemoFont};
     WindowFrame win{RectI{.pos = PointI{40, 50}, .size = SizeI{.w = 160, .h = 120}}, "DEMO",
-                    vesper::fonts::kDemoFont};
+                    vesper::fonts::kDemoFont, kScreenBounds};
     if (!win.initialize() || !win.set_content(&words) || !desktop.add_child(&win)) {
         std::println(stderr, "vesper: the desktop's child table is full");
         return 1;

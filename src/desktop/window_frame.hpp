@@ -39,8 +39,12 @@ class WindowFrame final : public visor::ui::Widget {
     /// The close box, a square outlined button in the band's right corner.
     static constexpr int kCloseBoxSize = 9;
 
+    /// desktop_bounds is the frame's leash: drags are clamped so the frame
+    /// never leaves that rectangle. A frame that could leave the desktop
+    /// could strand its title band out of reach, and the band is the only
+    /// handle this frame offers.
     WindowFrame(visor::base::RectI bounds, std::string_view title,
-                const visor::draw::MonoFont& font) noexcept;
+                const visor::draw::MonoFont& font, visor::base::RectI desktop_bounds) noexcept;
 
     /// Adopts the close box. Call once after construction; false means the
     /// child table is full, which a frame holding only its close box cannot
@@ -95,6 +99,7 @@ class WindowFrame final : public visor::ui::Widget {
     visor::draw::MonoFont font_;
     visor::ui::Button close_;
     visor::ui::Widget* content_ = nullptr;
+    visor::base::RectI desktop_bounds_;
     visor::base::PointI drag_offset_;
     bool dragging_ = false;
 };

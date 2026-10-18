@@ -45,7 +45,7 @@ struct Scene {
     Desktop desktop{kScreenBounds, "VESPER", vesper::fonts::kDemoFont, visor::ui::kLightTheme};
     visor::ui::Label content{PointI{0, 0}, "HELLO", vesper::fonts::kDemoFont};
     WindowFrame win{RectI{.pos = PointI{40, 50}, .size = SizeI{.w = 160, .h = 120}}, "DEMO",
-                    vesper::fonts::kDemoFont};
+                    vesper::fonts::kDemoFont, kScreenBounds};
 
     /// The strips of the fixed 480x320 screen, top to bottom.
     static constexpr int kStripHeight = 64;
@@ -211,5 +211,32 @@ void run_window_frame_tests() {
         VESPER_CHECK(s.win.visible());
         VESPER_CHECK(
             (s.win.bounds() == RectI{.pos = PointI{40, 50}, .size = SizeI{.w = 160, .h = 120}}));
+    }
+    // The leash: dragging hard off any edge pins the frame inside the
+    // desktop instead of stranding it out of reach. The same grab offset
+    // rides both corners: pressing (80, 55) on a frame at (40, 50) puts
+    // the origin 40 right and 5 down of the pointer, so the clamped
+    // landing is derived, not hard-coded.
+    {
+        Scene s;
+        VESPER_CHECK(s.build());
+        const PointI old_content = s.content.bounds().pos;
+        s.host.clear_regions();
+        s.feed({
+            visor::host::PointerDown{.button = 0, .pos = PointI{80, 55}},
+            visor::host::PointerMove{.pos = PointI{-1000, -1000}},
+            visor::host::PointerUp{.button = 0, .pos = PointI{-1000, -1000}},
+        });
+        VESPER_CHECK_EQ(s.pump(), 3);
+        VESPER_CHECK((s.win.bounds().pos == PointI{0, 0}));
+        VESPER_CHECK((s.content.bounds().pos == PointI{old_content.x - 40, old_content.y - 50}));
+        s.host.clear_regions();
+        s.feed({
+            visor::host::PointerDown{.button = 0, .pos = PointI{10, 5}},
+            visor::host::PointerMove{.pos = PointI{2000, 2000}},
+            visor::host::PointerUp{.button = 0, .pos = PointI{2000, 2000}},
+        });
+        VESPER_CHECK_EQ(s.pump(), 3);
+        VESPER_CHECK((s.win.bounds().pos == PointI{kScreen.w - 160, kScreen.h - 120}));
     }
 }

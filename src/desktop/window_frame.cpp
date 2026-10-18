@@ -9,6 +9,7 @@
 #include "visor/ui/painter.hpp"
 #include "visor/ui/text.hpp"
 #include "visor/ui/widgets/widget.hpp"
+#include <algorithm>
 #include <string_view>
 
 namespace vesper::desktop {
@@ -16,13 +17,14 @@ namespace vesper::desktop {
 using visor::base::PointI;
 using visor::base::RectI;
 
-WindowFrame::WindowFrame(RectI bounds, std::string_view title,
-                         const visor::draw::MonoFont& font) noexcept
+WindowFrame::WindowFrame(RectI bounds, std::string_view title, const visor::draw::MonoFont& font,
+                         RectI desktop_bounds) noexcept
     : Widget{bounds}, title_{title}, font_{font},
       close_{RectI{
           .pos = PointI{bounds.pos.x + bounds.size.w - kCloseBoxSize - 2, bounds.pos.y + 1},
           .size = {.w = kCloseBoxSize, .h = kCloseBoxSize},
-      }} {
+      }},
+      desktop_bounds_{desktop_bounds} {
     // Outlined on purpose: a filled button paints in Accent, the same ink
     // the band wears, and would vanish into it. The hollow box with the X
     // reads on both states.
@@ -111,11 +113,17 @@ void WindowFrame::on_pointer_down([[maybe_unused]] PointI at,
 void WindowFrame::on_pointer_move(PointI at) noexcept {
     // Capture keeps the moves coming while the press is held, wherever the
     // pointer goes; without a held press this is a hover visit and changes
-    // nothing.
+    // nothing. The leash clamps the drag into the desktop: a frame that
+    // could leave it could strand its title band out of reach.
     if (!dragging_) {
         return;
     }
-    set_position(PointI{at.x - drag_offset_.x, at.y - drag_offset_.y});
+    PointI next{at.x - drag_offset_.x, at.y - drag_offset_.y};
+    const int slack_x = std::max(desktop_bounds_.size.w - bounds().size.w, 0);
+    const int slack_y = std::max(desktop_bounds_.size.h - bounds().size.h, 0);
+    next.x = std::clamp(next.x, desktop_bounds_.pos.x, desktop_bounds_.pos.x + slack_x);
+    next.y = std::clamp(next.y, desktop_bounds_.pos.y, desktop_bounds_.pos.y + slack_y);
+    set_position(next);
 }
 
 void WindowFrame::on_pointer_up([[maybe_unused]] PointI at) noexcept {
