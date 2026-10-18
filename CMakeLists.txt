@@ -34,10 +34,11 @@ if(VESPER_TSAN)
     add_link_options(-fsanitize=thread)
 endif()
 
-# The desktop layer: session double, desktop root and the window frame.
+# The desktop layer: session double, desktop root, the window frame and icons.
 add_library(
     vesper.ui STATIC
     src/desktop/desktop.cpp
+    src/desktop/icon.cpp
     src/desktop/window_frame.cpp
     src/host/fake_session_host.cpp)
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src)
