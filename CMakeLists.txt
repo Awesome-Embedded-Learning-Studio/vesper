@@ -37,6 +37,7 @@ endif()
 # The desktop layer: session double, desktop root, the window frame and icons.
 add_library(
     vesper.ui STATIC
+    src/assets/pbm.cpp
     src/desktop/desktop.cpp
     src/desktop/icon.cpp
     src/desktop/window_frame.cpp
