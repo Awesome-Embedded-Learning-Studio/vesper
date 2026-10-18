@@ -6,7 +6,7 @@
 
 - **接法**：vesper 自己声明构建目标，编译输入直指 `VISOR_ROOT`（CMake 缓存变量，默认 `/home/charliechen/visor`）的 include 与 src。visor 仓零改动、零复制，`visor.core` / `visor.ui` / `visor.host` 三个目标在 vesper 的 CMakeLists 里声明，源码列表 `GLOB CONFIGURE_DEPENDS` 跟随活树。
 - **为什么不 `add_subdirectory`**：visor 的 CMakeLists 用 `CMAKE_SOURCE_DIR` 拼 include 路径、顶层无条件 `find_package(X11 REQUIRED)`，都只在 visor 当根时成立，修它等于改 visor。
-- **tested-against**：visor @ `f15128e`（refactor(host): split display data and give the table its accessors），2026-10-18 实测全绿。
+- **tested-against**：visor @ `4174f87`（feat(ui): add a full-screen popup layer，树语义束 B27–B30 终点），2026-10-18 实测全绿。两边验收同跑：visor 自家四道绿，vesper 四道绿。验收时 visor 工作树另有 dropdown 进行中修改未提交，不在束内，vesper 判例不受影响。
 - **红线**：不修改 visor 树内任何文件。vesper 缺件走上游提（见 documents/visor-upgrade-design.md），不私养借壳源。
 - **vendor 三前置**（达成本仓改整库 pin）：到达 Cinux-GUI 曾有高度、完成优化与基础控件、小 RAM 彩屏分块探针通过。
 
