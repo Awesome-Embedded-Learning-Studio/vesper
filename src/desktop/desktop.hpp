@@ -3,6 +3,7 @@
 #include <string_view>
 
 #include "visor/base/geometry/rect.hpp"
+#include "visor/draw/mono_bitmap.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/theme.hpp"
 #include "visor/ui/widgets/label/label.hpp"
@@ -33,11 +34,20 @@ class Desktop final : public visor::ui::Widget {
     /// is allowed in.
     [[nodiscard]] const visor::ui::Label& banner() const noexcept;
 
+    /// Sets the desk's picture, painted once at the desktop's origin under
+    /// everything the children add. A null pointer (or never calling) keeps
+    /// the plain ground fill. The bitmap is a borrowed view: the storage
+    /// (usually a decoded PbmImage) must outlive the desktop, the same
+    /// line the theme and font pointers draw. Parts reaching past the
+    /// desktop's box clip silently.
+    void set_wallpaper(const visor::draw::MonoBitmap* art) noexcept;
+
   protected:
     void on_draw(const visor::ui::Painter& painter) const noexcept override;
 
   private:
     visor::ui::Label banner_;
+    const visor::draw::MonoBitmap* wallpaper_ = nullptr;
 };
 
 } // namespace vesper::desktop

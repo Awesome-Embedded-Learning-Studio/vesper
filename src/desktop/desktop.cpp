@@ -3,6 +3,7 @@
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
 #include "visor/canvas/color.hpp"
+#include "visor/draw/mono_bitmap.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/painter.hpp"
 #include "visor/ui/theme.hpp"
@@ -30,8 +31,18 @@ const visor::ui::Label& Desktop::banner() const noexcept {
     return banner_;
 }
 
+void Desktop::set_wallpaper(const visor::draw::MonoBitmap* art) noexcept {
+    wallpaper_ = art;
+    // The ground pixels change with the picture, so the whole desk is owed;
+    // the window boxes above repaint on top of it in the same walk.
+    invalidate(bounds());
+}
+
 void Desktop::on_draw(const visor::ui::Painter& painter) const noexcept {
     painter.fill(bounds(), visor::canvas::ColorRole::Background);
+    if (wallpaper_ != nullptr) {
+        painter.draw_bitmap(bounds().pos, *wallpaper_, visor::canvas::ColorRole::Foreground, 1);
+    }
 }
 
 } // namespace vesper::desktop

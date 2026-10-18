@@ -2,6 +2,7 @@
 // The acceptance builds it, the human runs it (a display is needed); a double
 // click on the icon opens the window, its X box hides it again, quitting is
 // the window manager's X button.
+#include "assets/pbm.hpp"
 #include "desktop/desktop.hpp"
 #include "desktop/icon.hpp"
 #include "desktop/window_frame.hpp"
@@ -25,6 +26,7 @@
 #include <print>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -63,7 +65,7 @@ void open_window(Icon& self, void* context) noexcept {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     auto opened = visor::host::x11::X11WindowHost::open(nullptr, kScreen.w, kScreen.h, 2);
     if (!opened.has_value()) {
         std::println(stderr, "vesper: cannot open the display (is DISPLAY set?)");
@@ -71,8 +73,29 @@ int main() {
     }
     auto host = std::move(*opened);
 
+    // Optional argv[1]: a P4 bitmap painted as the desk's picture. Declared
+    // before the desktop because the wallpaper view borrows this storage.
+    vesper::assets::PbmImage wallpaper_image;
+    visor::draw::MonoBitmap wallpaper_view{};
+    if (argc > 1) {
+        std::vector<std::uint8_t> bytes;
+        if (!vesper::assets::read_file_bytes(argv[1], bytes)) {
+            std::println(stderr, "vesper: cannot read {}", argv[1]);
+            return 1;
+        }
+        wallpaper_image = vesper::assets::decode_pbm(bytes);
+        if (!wallpaper_image.ok) {
+            std::println(stderr, "vesper: {} is not a valid P4 bitmap", argv[1]);
+            return 1;
+        }
+        wallpaper_view = wallpaper_image.bitmap();
+    }
+
     Desktop desktop{kScreenBounds, "VESPER DESKTOP", vesper::fonts::kDemoFont,
                     visor::ui::kLightTheme};
+    if (wallpaper_image.ok) {
+        desktop.set_wallpaper(&wallpaper_view);
+    }
     Icon icon{RectI{.pos = PointI{20, 20}, .size = SizeI{.w = 48, .h = 32}}, kArt, "DEMO",
               vesper::fonts::kDemoFont};
     visor::ui::Label words{PointI{0, 0}, "HELLO FROM VESPER", vesper::fonts::kDemoFont};

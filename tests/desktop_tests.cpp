@@ -9,12 +9,15 @@
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
 #include "visor/canvas/mono_canvas.hpp"
+#include "visor/draw/mono_bitmap.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
 #include "visor/ui/run_loop.hpp"
 #include "visor/ui/theme.hpp"
 
+#include <array>
 #include <cstddef>
+#include <cstdint>
 
 namespace {
 
@@ -28,6 +31,18 @@ constexpr SizeI kScreen{.w = 480, .h = 320};
 constexpr RectI kScreenBounds{.pos = PointI{0, 0}, .size = kScreen};
 using Frame = visor::canvas::Canvas<kScreen>;
 using Strip = visor::canvas::Canvas<SizeI{.w = 480, .h = 64}>;
+
+// Wallpaper judgment art: one byte per row of eight, all rows 0xF0, so the
+// left half of the top eight screen rows lights (MSB first) and the right
+// half stays the ground's.
+constexpr std::array<std::uint8_t, 8> kWallpaperBits{
+    0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0,
+};
+constexpr visor::draw::MonoBitmap kWallpaper{
+    .width = 8,
+    .height = 8,
+    .rows = kWallpaperBits,
+};
 
 } // namespace
 
@@ -83,4 +98,23 @@ void run_desktop_tests() {
     VESPER_CHECK_EQ(idle, 0);
     VESPER_CHECK_EQ(dirty_host.flush_count(), before);
     VESPER_CHECK_EQ(dirty.count(), std::size_t{0});
+
+    // Wallpaper judgment: with a picture set, its lit pixels read lit on the
+    // host, the ground beside them reads unlit, and setting the picture owed
+    // the whole desk on its own -- no manual push, one round pays it.
+    FakeSessionHost paper_host{480, 320};
+    Desktop paper_desktop{kScreenBounds, "VESPER", vesper::fonts::kDemoFont,
+                          visor::ui::kLightTheme};
+    visor::ui::DirtyRegions paper_dirty;
+    paper_desktop.set_dirty_sink(&paper_dirty);
+    paper_desktop.set_wallpaper(&kWallpaper);
+    VESPER_CHECK_EQ(paper_dirty.count(), std::size_t{1}); // the setter owed the desk
+    Strip paper_strip;
+    visor::ui::InputRouter paper_input;
+    static_cast<void>(visor::ui::run_dirty(paper_host.table(), paper_desktop, paper_input,
+                                           paper_strip, kScreen, paper_dirty));
+    VESPER_CHECK(paper_host.get(PointI{0, 0}));  // wallpaper ink, left half
+    VESPER_CHECK(paper_host.get(PointI{3, 7}));  // still inside the picture's lit half
+    VESPER_CHECK(!paper_host.get(PointI{4, 0})); // the picture's own unlit half
+    VESPER_CHECK(!paper_host.get(PointI{0, 8})); // below the picture: ground
 }
