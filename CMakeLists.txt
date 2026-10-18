@@ -10,16 +10,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # of GCC-only flags so clang-tidy and clangd parse it cleanly.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-# The desktop borrows the visor tree in place: this cache variable points at it,
-# the targets below compile its sources straight from there, and nothing inside
-# the visor tree is modified or copied. add_subdirectory is not an option on
-# purpose -- visor's own CMakeLists resolves its include path against
-# CMAKE_SOURCE_DIR and requires X11 unconditionally, both of which only hold
-# while visor is the root project.
-set(VISOR_ROOT "/home/charliechen/visor" CACHE PATH "visor source tree borrowed in place")
-if(NOT EXISTS "${VISOR_ROOT}/include/visor/bindings/host.hpp")
-    message(FATAL_ERROR "VISOR_ROOT (${VISOR_ROOT}) carries no include/visor: a wrong tree was pointed at")
-endif()
+# The visor borrow: VISOR_ROOT lookup, the borrowed targets and the X11 tier.
+include(cmake/visor.cmake)
 
 option(VESPER_SANITIZE "ASan+UBSan switch" OFF)
 option(VESPER_TSAN "TSan switch" OFF)
@@ -42,24 +34,6 @@ if(VESPER_TSAN)
     add_link_options(-fsanitize=thread)
 endif()
 
-# Optional developer tooling, mirroring the visor stance: each check target is
-# created only when its tool is present, and version drift is accepted.
-find_program(VESPER_CLANG_FORMAT NAMES clang-format)
-find_program(VESPER_CLANG_TIDY NAMES clang-tidy)
-
-# Borrowed visor targets. The glob follows the live tree so a new visor source
-# file joins the build by itself; visor runs its own checks in its own repo, so
-# the format and tidy lanes below only ever look at vesper sources.
-add_library(visor.core INTERFACE)
-target_include_directories(visor.core INTERFACE ${VISOR_ROOT}/include)
-
-file(GLOB_RECURSE VESPER_VISOR_UI_SOURCES CONFIGURE_DEPENDS ${VISOR_ROOT}/src/ui/*.cpp)
-add_library(visor.ui STATIC ${VESPER_VISOR_UI_SOURCES})
-target_link_libraries(visor.ui PUBLIC visor.core)
-
-add_library(visor.host STATIC ${VISOR_ROOT}/src/bindings/host.cpp)
-target_link_libraries(visor.host PUBLIC visor.core)
-
 # The desktop layer: session double, desktop root and the window frame.
 add_library(
     vesper.ui STATIC
@@ -72,41 +46,11 @@ target_link_libraries(vesper.ui PUBLIC visor.ui visor.host)
 enable_testing()
 add_subdirectory(tests)
 
-# The eyeball lane: an X11 window running the same scene the judgments render.
-# It exists to be looked at, so it is skipped without X11 and carries no test.
-find_package(X11 QUIET)
+# The eyeball lane is wired here, not inside the visor borrow: the example
+# links vesper.ui, so it can only join after this project's own targets exist.
 if(X11_FOUND)
-    add_library(visor.host.x11 STATIC
-        ${VISOR_ROOT}/src/bindings/x11/event_wire.cpp
-        ${VISOR_ROOT}/src/bindings/x11/x11_window_host.cpp)
-    target_link_libraries(visor.host.x11 PUBLIC visor.core X11::X11)
     add_subdirectory(examples)
-else()
-    message(STATUS "X11 not found: the eyeball example is skipped")
 endif()
 
-file(GLOB_RECURSE VESPER_FORMAT_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/src/*.hpp
-    ${CMAKE_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_SOURCE_DIR}/examples/*.cpp
-    ${CMAKE_SOURCE_DIR}/tests/*.hpp
-    ${CMAKE_SOURCE_DIR}/tests/*.cpp)
-
-if(VESPER_CLANG_FORMAT)
-    add_custom_target(vesper.check-format
-        COMMAND ${VESPER_CLANG_FORMAT} --dry-run --Werror ${VESPER_FORMAT_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "clang-format check")
-endif()
-
-file(GLOB_RECURSE VESPER_TIDY_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_SOURCE_DIR}/tests/*.cpp
-    ${CMAKE_SOURCE_DIR}/examples/*.cpp)
-
-if(VESPER_CLANG_TIDY)
-    add_custom_target(vesper.check-tidy
-        COMMAND ${VESPER_CLANG_TIDY} --quiet -p ${CMAKE_BINARY_DIR} ${VESPER_TIDY_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "clang-tidy check")
-endif()
+# Optional tooling lanes: clang-format and clang-tidy over vesper sources.
+include(cmake/checks.cmake)
