@@ -33,8 +33,10 @@ scripts/checks/acceptance.sh
 
 ```bash
 cmake --build build --target x11_desktop
-./build/examples/x11_desktop
+DISPLAY=:0 ./build/examples/x11_desktop
 ```
+
+WSLg 下直接挂 `DISPLAY=:0`（XWayland 直连）。走 `localhost:0` 那条远程转发链路时窗口可能映射不上，查询类客户端（xdpyinfo、xwininfo）也会卡死，直连可解。
 
 ## 工程规范
 
