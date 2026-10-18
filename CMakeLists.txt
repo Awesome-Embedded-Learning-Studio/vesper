@@ -60,17 +60,35 @@ target_link_libraries(visor.ui PUBLIC visor.core)
 add_library(visor.host STATIC ${VISOR_ROOT}/src/bindings/host.cpp)
 target_link_libraries(visor.host PUBLIC visor.core)
 
-# The desktop layer: session double and the desktop root.
-add_library(vesper.ui STATIC src/desktop/desktop.cpp src/host/fake_session_host.cpp)
+# The desktop layer: session double, desktop root and the window frame.
+add_library(
+    vesper.ui STATIC
+    src/desktop/desktop.cpp
+    src/desktop/window_frame.cpp
+    src/host/fake_session_host.cpp)
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(vesper.ui PUBLIC visor.ui visor.host)
 
 enable_testing()
 add_subdirectory(tests)
 
+# The eyeball lane: an X11 window running the same scene the judgments render.
+# It exists to be looked at, so it is skipped without X11 and carries no test.
+find_package(X11 QUIET)
+if(X11_FOUND)
+    add_library(visor.host.x11 STATIC
+        ${VISOR_ROOT}/src/bindings/x11/event_wire.cpp
+        ${VISOR_ROOT}/src/bindings/x11/x11_window_host.cpp)
+    target_link_libraries(visor.host.x11 PUBLIC visor.core X11::X11)
+    add_subdirectory(examples)
+else()
+    message(STATUS "X11 not found: the eyeball example is skipped")
+endif()
+
 file(GLOB_RECURSE VESPER_FORMAT_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/src/*.hpp
     ${CMAKE_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/examples/*.cpp
     ${CMAKE_SOURCE_DIR}/tests/*.hpp
     ${CMAKE_SOURCE_DIR}/tests/*.cpp)
 
@@ -83,7 +101,8 @@ endif()
 
 file(GLOB_RECURSE VESPER_TIDY_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_SOURCE_DIR}/tests/*.cpp)
+    ${CMAKE_SOURCE_DIR}/tests/*.cpp
+    ${CMAKE_SOURCE_DIR}/examples/*.cpp)
 
 if(VESPER_CLANG_TIDY)
     add_custom_target(vesper.check-tidy
