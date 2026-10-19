@@ -7,5 +7,6 @@ int main() {
     run_window_frame_tests();
     run_icon_tests();
     run_pbm_tests();
+    run_terminal_tests();
     return vesper::testing::failure_count() == 0 ? 0 : 1;
 }

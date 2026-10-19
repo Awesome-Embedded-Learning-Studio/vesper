@@ -40,6 +40,7 @@ add_library(
     src/assets/pbm.cpp
     src/desktop/desktop.cpp
     src/desktop/icon.cpp
+    src/desktop/terminal.cpp
     src/desktop/window_frame.cpp
     src/host/fake_session_host.cpp)
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src)

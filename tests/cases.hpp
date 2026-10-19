@@ -7,3 +7,4 @@ void run_desktop_tests();
 void run_window_frame_tests();
 void run_icon_tests();
 void run_pbm_tests();
+void run_terminal_tests();
