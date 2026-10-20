@@ -5,6 +5,7 @@
 #include "desktop/icon.hpp"
 #include "desktop/window_frame.hpp"
 #include "fonts/demo_font.hpp"
+#include "host/evdev_input.hpp"
 #include "host/fake_session_host.hpp"
 
 #include "visor/base/geometry/point.hpp"
@@ -222,6 +223,57 @@ void run_icon_tests() {
         VESPER_CHECK_EQ(s.pump(), 2);
         VESPER_CHECK_EQ(s.opened, 0);
         VESPER_CHECK_EQ(s.desktop.child_count(), std::size_t{2});
+    }
+
+    // The bare host's full input path: first absolute report, double click,
+    // capture outside the desktop, reverse, release, and close. The display
+    // is larger than the desktop, as bochs-drm's preferred VM mode is.
+    {
+        Scene s;
+        VESPER_CHECK(s.build());
+        vesper::host::EvdevTranslator tablet{SizeI{.w = 1280, .h = 800},
+                                             SizeI{.w = 32768, .h = 32768}};
+        const auto word = [&](std::uint16_t type, std::uint16_t code, std::int32_t value) {
+            if (const auto event = tablet.feed(type, code, value)) {
+                VESPER_CHECK(s.host.push_event(*event));
+            }
+        };
+        const auto move = [&](PointI at) {
+            word(3, 0, ((at.x * 32767) + (1279 / 2)) / 1279);
+            word(3, 1, ((at.y * 32767) + (799 / 2)) / 799);
+            word(0, 0, 0);
+        };
+        const auto click = [&] {
+            word(1, 0x110, 1);
+            word(0, 0, 0);
+            word(1, 0x110, 0);
+            word(0, 0, 0);
+            static_cast<void>(s.pump());
+        };
+        move(kIconCenter);
+        click();
+        VESPER_CHECK_EQ(s.opened, 0);
+        s.host.advance_ms(100);
+        click();
+        VESPER_CHECK_EQ(s.opened, 1);
+
+        move(PointI{230, 125});
+        word(1, 0x110, 1);
+        move(PointI{900, 600});
+        static_cast<void>(s.pump());
+        VESPER_CHECK_EQ(s.win.bounds().pos, (PointI{360, 240}));
+        move(PointI{290, 150});
+        word(1, 0x110, 0);
+        static_cast<void>(s.pump());
+        VESPER_CHECK_EQ(s.win.bounds().pos, (PointI{260, 145}));
+        move(PointI{400, 200});
+        static_cast<void>(s.pump());
+        VESPER_CHECK_EQ(s.win.bounds().pos, (PointI{260, 145}));
+
+        const RectI close = s.win.close_box();
+        move(PointI{close.pos.x + (close.size.w / 2), close.pos.y + (close.size.h / 2)});
+        click();
+        VESPER_CHECK(!s.win.visible());
     }
 
     // Ink judgment: the art's corner pixel inside the icon box is lit, a

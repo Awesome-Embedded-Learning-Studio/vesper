@@ -10,5 +10,8 @@ int main() {
     run_terminal_tests();
     run_pty_tests();
     run_font_tests();
+    run_keymap_tests();
+    run_evdev_input_tests();
+    run_fbdev_device_tests();
     return vesper::testing::failure_count() == 0 ? 0 : 1;
 }

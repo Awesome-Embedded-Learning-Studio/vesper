@@ -1,6 +1,6 @@
 # vesper 开发工作流
 
-桌面层独立仓，KDE 式起头：纯用户态工程，消费 visor（填它的宿主表），产出可拖窗口的桌面加终端。规划文档 `documents/`（桌面环境调研九篇与 visor 补件提案），路线与接缝见 `pack-26-desktop-handover.md`，抄写留档在 `PIN.md`。
+桌面层独立仓，KDE 式起头：纯用户态工程，消费 visor（填它的宿主表），产出可拖窗口的桌面加终端。规划文档 `documents/`（调研九篇、visor 补件提案、路线与 Cinux 接缝见 `documents/desktop-roadmap.md`）。抄来的文件把借据写在自己的头部注释（来源仓与 HEAD、改动摘要），不设集中的留档文档（2026-10-20 作者拍板）。
 
 ## 角色分工（沿 visor 口径，2026-10-17 起）
 
@@ -11,15 +11,15 @@
 
 ## 必跑验收
 
-最终验收必须运行 `scripts/checks/acceptance.sh`，覆盖四道：rel 构建与全部测试、ASan/UBSan 构建与全部测试、clang-format、clang-tidy。任何一步失败脚本即停，不得关检查、忽略退出码或跳过失败用例后报验收通过。TSan 道在 D4（事件循环扩成 poll 编排）前缺位：D0/D1 纯单线程离屏，届时补道数，覆盖范围与限制要跟结果一起写进批记。
+最终验收必须运行 `scripts/checks/acceptance.sh`，覆盖五道：rel 构建与全部测试、ASan/UBSan 构建与全部测试、TSan 构建与全部测试、clang-format、clang-tidy。任何一步失败脚本即停，不得关检查、忽略退出码或跳过失败用例后报验收通过。fbdev 实弹单列在 `scripts/vm/smoke.sh`（QEMU 加 KVM 的裸机彩排，串口标记加截屏像素判例），不进五道：没有 `/dev/fb0` 的开发机跑不了它，内核与 rootfs 的构建产物也只构建一次缓存着用。
 
 ## 借壳红线（借壳期适用，vendor 后作废）
 
-- **不修改 visor 树内任何文件。** 缺件走上游提（提案束清单见 documents/visor-upgrade-design.md），不私养借壳源。demo_font 这类非库目标件例外，抄写进 `src/fonts/` 并在 PIN.md 留档。
+- **不修改 visor 树内任何文件。** 缺件走上游提（提案束清单见 documents/visor-upgrade-design.md），不私养借壳源。非库目标件例外（Cinux-GUI 的 host 接线、脚本这类），抄写进对应目录，借据写在文件头。
 - VISOR_ROOT 是 CMake 缓存变量，缺省 `/home/charliechen/visor`，配置时 `-DVISOR_ROOT=...` 改指他处。它只该指向一棵能过 visor 自家验收的 visor 树，vesper 的绿色不兜底一棵坏的 visor。
-- tested-against 记在 PIN.md，visor 那边有新提交后重验并更新。
+- tested-against 记在本节：visor @ `4174f87`（feat(ui): add a full-screen popup layer，2026-10-18 实测全绿）。visor 彩核改造施工的过渡期，验收与 VM 静态构建以 `VISOR_ROOT=/home/charliechen/visor-pin-4174f87`（git archive 物化的同一提交）跑，活树恢复后切回并更新此行。
 - **X11 只进肉眼通道。** visor.host.x11 只被 examples 的调试目标链接，不进主库、不进验收，验收以 fake host 为准。
-- 待补：D4 补 TSan 道，D5 fbdev/evdev 抄写按 PIN 格式留档，D2 拍子表容量议题。
+- 待补：visor 彩核改造落地后重验并更新上一条的 tested-against；D5b Wayland 后端（weston headless 判例，开发机未装）。D2 的子表容量议题已随 visor `5bc71dc`（孩子表改侵入式链表）在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
 
 ## 架构边界
 

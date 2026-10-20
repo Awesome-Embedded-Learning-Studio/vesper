@@ -10,3 +10,6 @@ void run_pbm_tests();
 void run_terminal_tests();
 void run_pty_tests();
 void run_font_tests();
+void run_keymap_tests();
+void run_evdev_input_tests();
+void run_fbdev_device_tests();

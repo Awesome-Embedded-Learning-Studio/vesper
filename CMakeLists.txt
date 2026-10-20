@@ -43,7 +43,10 @@ add_library(
     src/desktop/pty_source.cpp
     src/desktop/terminal.cpp
     src/desktop/window_frame.cpp
+    src/host/evdev_input.cpp
     src/host/fake_session_host.cpp
+    src/host/fbdev_device.cpp
+    src/host/keymap.cpp
     src/host/pty.cpp)
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(vesper.ui PUBLIC visor.ui visor.host)
@@ -51,11 +54,11 @@ target_link_libraries(vesper.ui PUBLIC visor.ui visor.host)
 enable_testing()
 add_subdirectory(tests)
 
-# The eyeball lane is wired here, not inside the visor borrow: the example
-# links vesper.ui, so it can only join after this project's own targets exist.
-if(X11_FOUND)
-    add_subdirectory(examples)
-endif()
+# The eyeball and VM lanes are wired here, not inside the visor borrow: the
+# examples link vesper.ui, so they can only join after this project's own
+# targets exist. The fbdev example needs no display server and builds
+# everywhere Linux headers do; the X11 one gates itself inside.
+add_subdirectory(examples)
 
 # Optional tooling lanes: clang-format and clang-tidy over vesper sources.
 include(cmake/checks.cmake)

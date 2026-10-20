@@ -18,7 +18,15 @@ file(GLOB_RECURSE VESPER_VISOR_UI_SOURCES CONFIGURE_DEPENDS ${VISOR_ROOT}/src/ui
 add_library(visor.ui STATIC ${VESPER_VISOR_UI_SOURCES})
 target_link_libraries(visor.ui PUBLIC visor.core)
 
-add_library(visor.host STATIC ${VISOR_ROOT}/src/bindings/host.cpp)
+# The host library carries the two pure bindings beside the table itself:
+# the evdev word translator (keys, buttons, relative axes) and the cinux
+# frame expansion (mono bits into XRGB8888 words). Both are plain logic
+# with no system dependency, so they ride the core host target; the X11
+# binding stays separate below because it links a real library.
+add_library(visor.host STATIC
+    ${VISOR_ROOT}/src/bindings/host.cpp
+    ${VISOR_ROOT}/src/bindings/evdev/event_wire.cpp
+    ${VISOR_ROOT}/src/bindings/cinux/frame_expand.cpp)
 target_link_libraries(visor.host PUBLIC visor.core)
 
 # The eyeball lane: an X11 window running the same scene the judgments render.
