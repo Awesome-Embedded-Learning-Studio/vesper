@@ -47,10 +47,10 @@ constexpr visor::draw::MonoBitmap kWallpaper{
 } // namespace
 
 void run_desktop_tests() {
-    // D0 flagship judgment: one full frame off screen. The light theme keeps
-    // the ground unlit, so the banner is the only ink a correct frame may
-    // carry -- every lit pixel on the host must lie inside the banner's box,
-    // and the banner must have drawn at least one.
+    // The panel is the one deliberate ink on a fresh desk: every lit pixel
+    // must lie inside panel_bounds(), and the panel's fill must be lit.
+    // The banner label paints in the background ink on that fill, so its
+    // box carries holes rather than extra ink -- a hole proves it drew.
     FakeSessionHost host{480, 320};
     Desktop desktop{kScreenBounds, "VESPER", vesper::fonts::kDemoFont, visor::ui::kLightTheme};
     Frame frame;
@@ -58,23 +58,25 @@ void run_desktop_tests() {
     VESPER_CHECK_EQ(host.flush_count(), 1);
     VESPER_CHECK(host.regions()[0] == kScreenBounds);
 
+    const RectI panel_bounds = desktop.panel_bounds();
     const RectI banner_bounds = desktop.banner().bounds();
-    int lit_inside = 0;
-    int lit_outside = 0;
+    int lit_above_panel = 0;
+    int unlit_in_banner = 0;
     for (int y = 0; y < kScreen.h; ++y) {
         for (int x = 0; x < kScreen.w; ++x) {
-            if (!host.get(PointI{x, y})) {
-                continue;
+            const PointI at{x, y};
+            const bool lit = host.get(at);
+            if (lit && !panel_bounds.contains(at)) {
+                ++lit_above_panel;
             }
-            if (banner_bounds.contains(PointI{x, y})) {
-                ++lit_inside;
-            } else {
-                ++lit_outside;
+            if (!lit && banner_bounds.contains(at)) {
+                ++unlit_in_banner;
             }
         }
     }
-    VESPER_CHECK(lit_inside > 0);
-    VESPER_CHECK_EQ(lit_outside, 0);
+    VESPER_CHECK_EQ(lit_above_panel, 0);
+    VESPER_CHECK(host.get(PointI{kScreen.w - 2, panel_bounds.pos.y + 1})); // panel fill
+    VESPER_CHECK(unlit_in_banner > 0);                                     // the name cut out of it
 
     // The dirty path: the first frame is the caller's debt, one round pays
     // it, and a round that changed nothing submits nothing.

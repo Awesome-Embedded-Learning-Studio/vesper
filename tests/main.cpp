@@ -8,5 +8,7 @@ int main() {
     run_icon_tests();
     run_pbm_tests();
     run_terminal_tests();
+    run_pty_tests();
+    run_font_tests();
     return vesper::testing::failure_count() == 0 ? 0 : 1;
 }

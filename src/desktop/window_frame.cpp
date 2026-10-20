@@ -1,33 +1,64 @@
 #include "desktop/window_frame.hpp"
 
+#include "desktop/style.hpp"
+
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
+#include "visor/base/geometry/size.hpp"
 #include "visor/base/helpers/rect_helper.hpp"
 #include "visor/bindings/events.hpp"
 #include "visor/canvas/color.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/painter.hpp"
 #include "visor/ui/text.hpp"
+#include "visor/ui/theme.hpp"
 #include "visor/ui/widgets/widget.hpp"
 #include <algorithm>
+#include <cstdint>
 #include <string_view>
 
 namespace vesper::desktop {
 
 using visor::base::PointI;
 using visor::base::RectI;
+using visor::base::SizeI;
+using visor::canvas::ColorRole;
+using visor::ui::CornerRadius;
+
+namespace {
+
+/// Shrinks each corner, so an inset fill keeps the outer silhouette one
+/// pixel thick instead of letting its own corners poke past it.
+CornerRadius inset_corners(CornerRadius radius, int by) noexcept {
+    const auto shrink = [by](std::uint8_t value) {
+        return static_cast<std::uint8_t>(std::max(static_cast<int>(value) - by, 0));
+    };
+    return CornerRadius{
+        .top_left = shrink(radius.top_left),
+        .top_right = shrink(radius.top_right),
+        .bottom_right = shrink(radius.bottom_right),
+        .bottom_left = shrink(radius.bottom_left),
+    };
+}
+
+/// The close box's home: a square tucked into the band's right corner.
+RectI close_box_for(RectI frame) noexcept {
+    return RectI{
+        .pos = PointI{frame.pos.x + frame.size.w - style::kCloseInset - style::kCloseBoxSize,
+                      frame.pos.y + style::kCloseInset},
+        .size = {.w = style::kCloseBoxSize, .h = style::kCloseBoxSize},
+    };
+}
+
+} // namespace
 
 WindowFrame::WindowFrame(RectI bounds, std::string_view title, const visor::draw::MonoFont& font,
                          RectI desktop_bounds) noexcept
-    : Widget{bounds}, title_{title}, font_{font},
-      close_{RectI{
-          .pos = PointI{bounds.pos.x + bounds.size.w - kCloseBoxSize - 2, bounds.pos.y + 1},
-          .size = {.w = kCloseBoxSize, .h = kCloseBoxSize},
-      }},
+    : Widget{bounds}, title_{title}, font_{font}, close_{close_box_for(bounds)},
       desktop_bounds_{desktop_bounds} {
     // Outlined on purpose: a filled button paints in Accent, the same ink
-    // the band wears, and would vanish into it. The hollow box with the X
-    // reads on both states.
+    // the active band wears, and would vanish into it. The hollow box with
+    // the title font's X reads on both band states.
     close_.set_outlined(true);
     close_.set_label("X", font_);
     // The close box fires into this frame: the handler's context word is the
@@ -61,17 +92,35 @@ RectI WindowFrame::title_bar() const noexcept {
 }
 
 RectI WindowFrame::content_area() const noexcept {
-    return RectI{
-        .pos = PointI{bounds().pos.x + 1, bounds().pos.y + 1 + kTitleBarHeight},
-        .size = {.w = bounds().size.w - 2, .h = bounds().size.h - 2 - kTitleBarHeight},
+    // The content sits under the band with one padding unit of air on every
+    // side, the frame's one-pixel border included. The band owns the top
+    // row, so the content's top pad measures from the band's bottom edge.
+    const PointI origin{bounds().pos.x + 1 + style::kContentPadding,
+                        bounds().pos.y + kTitleBarHeight + style::kContentPadding};
+    const SizeI size{
+        .w = bounds().size.w - 2 - (2 * style::kContentPadding),
+        .h = bounds().size.h - kTitleBarHeight - 1 - (2 * style::kContentPadding),
     };
+    return RectI{.pos = origin, .size = size};
 }
 
 RectI WindowFrame::close_box() const noexcept {
-    return RectI{
-        .pos = PointI{bounds().pos.x + bounds().size.w - kCloseBoxSize - 2, bounds().pos.y + 1},
-        .size = {.w = kCloseBoxSize, .h = kCloseBoxSize},
-    };
+    return close_box_for(bounds());
+}
+
+void WindowFrame::set_on_focus(FocusHandler handler, void* context) noexcept {
+    on_focus_ = handler;
+    focus_context_ = context;
+}
+
+void WindowFrame::set_active(bool on) noexcept {
+    if (active_ == on) {
+        return;
+    }
+    active_ = on;
+    // The band's ink is the only change; the content and the close box do
+    // not know about the state.
+    invalidate(bounds());
 }
 
 void WindowFrame::set_position(PointI pos) noexcept {
@@ -99,10 +148,16 @@ void WindowFrame::layout_children() noexcept {
 
 void WindowFrame::on_pointer_down([[maybe_unused]] PointI at,
                                   [[maybe_unused]] visor::host::Modifiers modifiers) noexcept {
-    // Only a press that hit testing actually routed here starts a drag; the
-    // close box and the content take their own presses first. The band test
-    // is the frame's own judgment of where the press landed -- a press on
-    // the border pixels drags too, which reads as grabbing the frame.
+    // The press reached the frame itself, so the desktop's cue fires before
+    // the band test: clicking the border or the band hands this frame the
+    // keyboard, the way a window manager focuses on any press.
+    if (on_focus_ != nullptr) {
+        on_focus_(*this, focus_context_);
+    }
+    // Only a press on the band starts a drag; the close box and the content
+    // take their own presses before this handler. The band test is the
+    // frame's own judgment of where the press landed -- a press on the
+    // border pixels drags too, which reads as grabbing the frame.
     if (!title_bar().contains(at)) {
         return;
     }
@@ -131,15 +186,23 @@ void WindowFrame::on_pointer_up([[maybe_unused]] PointI at) noexcept {
 }
 
 void WindowFrame::on_draw(const visor::ui::Painter& painter) const noexcept {
-    // One-pixel silhouette in Border, face in Background, band in Accent;
-    // the children (close box, content) paint on top of this ground.
-    painter.fill(bounds(), visor::canvas::ColorRole::Border);
-    painter.fill(visor::base::inset(bounds(), 1), visor::canvas::ColorRole::Background);
-    painter.fill(title_bar(), visor::canvas::ColorRole::Accent);
-    const PointI at{bounds().pos.x + 3,
-                    bounds().pos.y + ((kTitleBarHeight - static_cast<int>(font_.line_height)) / 2)};
-    visor::ui::draw_text_clipped(painter, title_bar(), at, font_, title_,
-                                 visor::canvas::ColorRole::OnAccent, 1);
+    // One-pixel silhouette in Border, face in Background, band in Accent
+    // when active and in the plain face when not. The children (close box,
+    // content) paint on top of this ground. Rounding comes from the theme's
+    // corner radius, so a scheme with square corners paints square windows.
+    const CornerRadius outer = theme() != nullptr ? theme()->corner_radius : CornerRadius{};
+    const CornerRadius inner = inset_corners(outer, 1);
+    painter.fill_rounded(bounds(), ColorRole::Border, outer);
+    painter.fill_rounded(visor::base::inset(bounds(), 1), ColorRole::Background, inner);
+
+    const RectI band = visor::base::inset(title_bar(), 1);
+    painter.fill_rounded(band, active_ ? ColorRole::Accent : ColorRole::Background, inner);
+
+    const int title_y =
+        band.pos.y + std::max((band.size.h - static_cast<int>(font_.line_height)) / 2, 0);
+    const PointI at{bounds().pos.x + style::kTitleInset, title_y};
+    visor::ui::draw_text_clipped(painter, band, at, font_, title_,
+                                 active_ ? ColorRole::OnAccent : ColorRole::Foreground, 1);
 }
 
 } // namespace vesper::desktop

@@ -224,4 +224,59 @@ void run_terminal_tests() {
         }
         VESPER_CHECK(unlit_band > 0);
     }
+
+    // ANSI, the trio a real prompt emits plus the swallow rules: erase in
+    // line after a carriage return (the prompt redraw), cursor position,
+    // erase in screen, tab stops, private sequences eaten whole.
+    {
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("ABCD"); // fills row 0, cursor wraps to (0, 1)
+        term.receive("XY");
+        term.receive("\r\x1b[K"); // the prompt redraw: rewind, erase rest
+        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
+        VESPER_CHECK_EQ(term.cell(0, 1), ' ');
+        VESPER_CHECK_EQ(term.cell(1, 1), ' ');
+        VESPER_CHECK_EQ(term.cursor_col(), 0);
+        VESPER_CHECK_EQ(term.cursor_row(), 1);
+        term.receive("\x1b[2;3H"); // 1-based row;column -> cell (2, 1)
+        VESPER_CHECK_EQ(term.cursor_col(), 2);
+        VESPER_CHECK_EQ(term.cursor_row(), 1);
+        term.receive("Z");
+        VESPER_CHECK_EQ(term.cell(2, 1), 'Z');
+        term.receive("\x1b[2J"); // everything blank, cursor stays
+        VESPER_CHECK_EQ(term.cell(0, 0), ' ');
+        VESPER_CHECK_EQ(term.cell(2, 1), ' ');
+        VESPER_CHECK_EQ(term.cursor_col(), 3);
+    }
+
+    // A sequence split across two receive() calls still lands: the escape
+    // walker keeps its seat between batches.
+    {
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("AB\x1b[");
+        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
+        term.receive("K"); // the tail arrives, the erase happens
+        VESPER_CHECK_EQ(term.cell(1, 0), 'B');
+        VESPER_CHECK_EQ(term.cell(2, 0), ' ');
+    }
+
+    // Private sequences (bracketed paste, cursor modes) and unknown finals
+    // are swallowed whole: parsed, not obeyed, never painted.
+    {
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[?2004hQ");
+        VESPER_CHECK_EQ(term.cell(0, 0), 'Q');
+        term.receive("\x1b[1mR"); // SGR is not this screen's business
+        VESPER_CHECK_EQ(term.cell(1, 0), 'R');
+    }
+
+    // Tab stops every eight columns.
+    {
+        Terminal term{kFullTerm, vesper::fonts::kDemoFont};
+        term.receive("A\tB");
+        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
+        VESPER_CHECK_EQ(term.cell(7, 0), ' ');
+        VESPER_CHECK_EQ(term.cell(8, 0), 'B');
+        VESPER_CHECK_EQ(term.cursor_col(), 9);
+    }
 }

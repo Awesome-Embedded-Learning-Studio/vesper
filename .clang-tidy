@@ -21,6 +21,12 @@ WarningsAsErrors: '*'
 HeaderFilterRegex: 'assets/|desktop/|host/|fonts/'
 FormatStyle: file
 CheckOptions:
+  # clangd's stdlib map carries no entry for poll.h, so include-cleaner
+  # reports "no header providing poll/pollfd/POLLIN" even with the file
+  # included at every use site. The header IS included by hand; the tool's
+  # suggestion for it is silenced here, nowhere else.
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: 'poll.h'
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
   - key: readability-identifier-naming.StructCase

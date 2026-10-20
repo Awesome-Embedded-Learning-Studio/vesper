@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string_view>
 #include <vector>
 
@@ -43,9 +44,12 @@ class TerminalSource {
  * them in the grid. What receive() understands: printable ASCII goes into
  * the cell under the cursor, '\n' steps to the next row's start, '\r'
  * rewinds the pen to the line start, '\b' steps back one cell and blanks
- * it. Everything else is ANSI's business and waits for D4. Typing past the
- * last column wraps, and a newline on the last row scrolls the grid up one
- * line.
+ * it, '\t' jumps to the next eight-column stop. Of ANSI it obeys the trio
+ * a real prompt actually emits -- CSI K (erase in line), CSI J (erase in
+ * screen) and CSI H (cursor position, 1-based row;column) -- and swallows
+ * every other sequence whole, parsed and not obeyed, so no stray brackets
+ * ever paint. Typing past the last column wraps, and a newline on the last
+ * row scrolls the grid up one line.
  *
  * The screen paints as an inverted box -- lit ground, glyphs and cursor
  * punched as unlit holes -- so one ink sets the terminal off the desk's
@@ -85,6 +89,17 @@ class Terminal final : public visor::ui::Widget {
     void on_draw(const visor::ui::Painter& painter) const noexcept override;
 
   private:
+    /// The escape walker's state: an ESC swallowed in one receive() may see
+    /// its tail arrive in the next, so the walk lives between calls.
+    enum class EscState : std::uint8_t { Ground, Esc, Bracket };
+
+    /// Acts on one complete CSI sequence's final byte ('K', 'J', 'H'); the
+    /// parameters sit in csi_params_, count in csi_param_count_.
+    void apply_csi(unsigned char final_byte) noexcept;
+
+    /// Blanks the inclusive column span on one row, clamped to the grid.
+    void erase_cells(int col_from, int col_to, int row) noexcept;
+
     /// The cells vector's index of one grid position.
     [[nodiscard]] std::size_t cell_index(int col, int row) const noexcept;
 
@@ -104,6 +119,10 @@ class Terminal final : public visor::ui::Widget {
     std::vector<char> cells_;
     int cursor_col_ = 0;
     int cursor_row_ = 0;
+    EscState esc_ = EscState::Ground;
+    std::array<int, 2> csi_params_ = {0, 0};
+    int csi_param_count_ = 0;
+    bool csi_private_ = false;
 };
 
 /**

@@ -224,17 +224,37 @@ void run_icon_tests() {
         VESPER_CHECK_EQ(s.desktop.child_count(), std::size_t{2});
     }
 
-    // The icon's ink paints where the art and the caption live: the art's
-    // corner pixel inside the icon box is lit, a pixel of the blank margin
-    // around it is not. The desk's ground shows between the ink.
+    // Ink judgment: the art's corner pixel inside the icon box is lit, a
+    // pixel of the blank margin around it is not. The block is art plus the
+    // caption gap plus one line: 8 + 2 + 7 = 17 tall in a 32-tall box, so
+    // the block starts at 20 + ((32 - 17) / 2) = 27 and the art's second row
+    // is the one at y=28. The desk's ground shows between the ink.
     {
         Scene s;
         VESPER_CHECK(s.build());
         static_cast<void>(s.pump());
-        // Art: 8 wide centered in a 48-wide box -> art_x = 20 + 20 = 40,
-        // block_top = 20 + ((32 - 16) / 2) = 28.
+        // Art: 8 wide centered in a 48-wide box -> art_x = 20 + 20 = 40.
         VESPER_CHECK((s.host.get(PointI{40, 28})));  // art corner
         VESPER_CHECK((!s.host.get(PointI{39, 28}))); // one left of the art
         VESPER_CHECK((!s.host.get(PointI{20, 20}))); // the icon box's own corner
+    }
+
+    // Selection judgment: the selected look is a one-pixel ring around the
+    // slot. Its corners light, the ground one pixel inside stays dark, and
+    // clearing the state gives the ring's pixels back to the desk.
+    {
+        Scene s;
+        VESPER_CHECK(s.build());
+        static_cast<void>(s.pump());
+        s.icon.set_selected(true);
+        static_cast<void>(s.pump());
+        VESPER_CHECK(s.icon.selected());
+        VESPER_CHECK((s.host.get(PointI{kIconBounds.pos.x, kIconBounds.pos.y})));
+        VESPER_CHECK(
+            (s.host.get(PointI{kIconBounds.pos.x + kIconBounds.size.w - 1, kIconBounds.pos.y})));
+        VESPER_CHECK((!s.host.get(PointI{kIconBounds.pos.x + 1, kIconBounds.pos.y + 1})));
+        s.icon.set_selected(false);
+        static_cast<void>(s.pump());
+        VESPER_CHECK((!s.host.get(PointI{kIconBounds.pos.x, kIconBounds.pos.y})));
     }
 }

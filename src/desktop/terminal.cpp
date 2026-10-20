@@ -51,10 +51,52 @@ char Terminal::cell(int col, int row) const noexcept {
 void Terminal::receive(std::string_view bytes) noexcept {
     for (const char c : bytes) {
         const auto byte = static_cast<unsigned char>(c);
-        if (byte == '\b') {
+
+        if (esc_ == EscState::Esc) {
+            // One byte after ESC decides: '[' opens a CSI sequence; anything
+            // else is a two-byte escape whose meaning this screen does not
+            // need, swallowed whole.
+            if (byte == '[') {
+                esc_ = EscState::Bracket;
+                csi_params_ = {0, 0};
+                csi_param_count_ = 0;
+                csi_private_ = false;
+            } else {
+                esc_ = EscState::Ground;
+            }
+            continue;
+        }
+        if (esc_ == EscState::Bracket) {
+            if (byte >= '0' && byte <= '9') {
+                csi_params_[static_cast<std::size_t>(csi_param_count_)] =
+                    (csi_params_[static_cast<std::size_t>(csi_param_count_)] * 10) + (byte - '0');
+            } else if (byte == ';') {
+                if (csi_param_count_ + 1 < 2) {
+                    ++csi_param_count_;
+                }
+            } else if (byte >= 0x3c && byte <= 0x3f) {
+                // '?' and neighbors mark a private sequence (mode set and
+                // reset); none of the actions are honored for those.
+                csi_private_ = true;
+            } else if (byte >= 0x20 && byte <= 0x2f) {
+                // Intermediate bytes carry refinements this screen ignores.
+            } else if (byte >= 0x40 && byte <= 0x7e) {
+                apply_csi(byte);
+                esc_ = EscState::Ground;
+            } else {
+                // A control byte inside the sequence aborts it; the byte
+                // goes with it.
+                esc_ = EscState::Ground;
+            }
+            continue;
+        }
+
+        if (byte == 0x1b) {
+            esc_ = EscState::Esc;
+        } else if (byte == '\b') {
             // Backspace: the pen steps back one cell and blanks it. A cursor
             // already at a line start stays put -- wrapping the erase upward
-            // is a real terminal's trick, not D3's.
+            // is a real terminal's trick, not this screen's.
             if (cursor_col_ > 0) {
                 --cursor_col_;
             }
@@ -65,15 +107,70 @@ void Terminal::receive(std::string_view bytes) noexcept {
             cursor_col_ = 0;
         } else if (byte == '\r') {
             cursor_col_ = 0;
+        } else if (byte == '\t') {
+            // Tab stops every eight columns, the 80-column habit.
+            const int next_stop = ((cursor_col_ / 8) + 1) * 8;
+            cursor_col_ = std::min(next_stop, cols_ - 1);
         } else if (byte >= 0x20 && byte <= 0x7e) {
             put(byte);
         }
-        // Every other byte is ANSI's business and waits for D4.
+        // The remaining control bytes (bell and company) are not this
+        // screen's business.
     }
     // One batch, one repaint debt. The text can land anywhere inside the
     // screen, and the screen is small enough that the whole box is the
     // honest report.
     invalidate(bounds());
+}
+
+void Terminal::erase_cells(int col_from, int col_to, int row) noexcept {
+    const int first = std::max(col_from, 0);
+    const int last = std::min(col_to, cols_ - 1);
+    for (int col = first; col <= last; ++col) {
+        cells_[cell_index(col, row)] = ' ';
+    }
+}
+
+void Terminal::apply_csi(unsigned char final_byte) noexcept {
+    if (csi_private_) {
+        return;
+    }
+    const int first = csi_params_[0];
+    const int second = csi_params_[1];
+    if (final_byte == 'K') {
+        // Erase in line: 0 cursor-to-end (the default), 1 start-to-cursor,
+        // 2 the whole line.
+        if (first == 0) {
+            erase_cells(cursor_col_, cols_ - 1, cursor_row_);
+        } else if (first == 1) {
+            erase_cells(0, cursor_col_, cursor_row_);
+        } else if (first == 2) {
+            erase_cells(0, cols_ - 1, cursor_row_);
+        }
+    } else if (final_byte == 'J') {
+        // Erase in screen: 0 cursor-to-end (the default), 1 start-to-
+        // cursor, 2 everything. The cursor stays put on all three.
+        if (first == 0) {
+            erase_cells(cursor_col_, cols_ - 1, cursor_row_);
+            for (int row = cursor_row_ + 1; row < rows_; ++row) {
+                erase_cells(0, cols_ - 1, row);
+            }
+        } else if (first == 1) {
+            for (int row = 0; row < cursor_row_; ++row) {
+                erase_cells(0, cols_ - 1, row);
+            }
+            erase_cells(0, cursor_col_, cursor_row_);
+        } else if (first == 2) {
+            for (int row = 0; row < rows_; ++row) {
+                erase_cells(0, cols_ - 1, row);
+            }
+        }
+    } else if (final_byte == 'H' || final_byte == 'f') {
+        // Cursor position, 1-based row;column; defaults and zeros both home.
+        cursor_row_ = std::clamp(std::max(first, 1) - 1, 0, rows_ - 1);
+        cursor_col_ = std::clamp(std::max(second, 1) - 1, 0, cols_ - 1);
+    }
+    // Every other final byte is swallowed: parsed, not obeyed.
 }
 
 void Terminal::on_key_down(std::uint32_t code, visor::host::Modifiers modifiers) noexcept {

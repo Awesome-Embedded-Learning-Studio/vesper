@@ -2,6 +2,8 @@
 
 #include <string_view>
 
+#include "desktop/style.hpp"
+
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
 #include "visor/bindings/events.hpp"
@@ -30,14 +32,23 @@ namespace vesper::desktop {
  * the dirty sink, so a drag never leaves stale pixels or unclaimed ones.
  * Bounds go through set_position (or the constructor); the inherited
  * set_bounds would move the frame and strand its children.
+ *
+ * Two states, painted, not inferred: an active frame wears the accent band,
+ * an inactive one the plain ground. The desktop says which is which through
+ * set_active; the frame does not reach for a focus manager it does not own.
  */
 class WindowFrame final : public visor::ui::Widget {
   public:
-    /// The band's height; the 5x7 title font rides centered inside it.
-    static constexpr int kTitleBarHeight = 11;
+    /// @brief What a press on the frame calls, before the drag logic: the
+    ///        desktop's cue to make this frame the active one.
+    using FocusHandler = void (*)(WindowFrame& self, void* context);
+
+    /// The band's height, border rows included; the title font rides
+    /// centered inside it.
+    static constexpr int kTitleBarHeight = style::kTitleBarHeight;
 
     /// The close box, a square outlined button in the band's right corner.
-    static constexpr int kCloseBoxSize = 9;
+    static constexpr int kCloseBoxSize = style::kCloseBoxSize;
 
     /// desktop_bounds is the frame's leash: drags are clamped so the frame
     /// never leaves that rectangle. A frame that could leave the desktop
@@ -76,6 +87,15 @@ class WindowFrame final : public visor::ui::Widget {
     /// stood; state and content stay as they are for a later re-showing.
     void close() noexcept;
 
+    /// Wires the press cue; the handler runs before the band's drag starts.
+    void set_on_focus(FocusHandler handler, void* context = nullptr) noexcept;
+
+    /// The band's ink state. A no-op when the state already matches, so a
+    /// desktop may call it on every press without buying repaints.
+    void set_active(bool on) noexcept;
+
+    [[nodiscard]] bool active() const noexcept { return active_; }
+
     void on_pointer_down(visor::base::PointI at,
                          visor::host::Modifiers modifiers) noexcept override;
     void on_pointer_move(visor::base::PointI at) noexcept override;
@@ -101,7 +121,10 @@ class WindowFrame final : public visor::ui::Widget {
     visor::ui::Widget* content_ = nullptr;
     visor::base::RectI desktop_bounds_;
     visor::base::PointI drag_offset_;
+    FocusHandler on_focus_ = nullptr;
+    void* focus_context_ = nullptr;
     bool dragging_ = false;
+    bool active_ = true;
 };
 
 } // namespace vesper::desktop
