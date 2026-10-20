@@ -8,12 +8,12 @@
 
 ```bash
 scripts/vm/build_kernel.sh     # 首次：拉 6.18.57 定版 tarball 自编，--http1.1（HTTP/2 会断流）
-scripts/vm/build_busybox.sh    # 首次：静态 busybox，源默认本机 PenguinLab 树，BUSYBOX_SRC 可覆盖
+scripts/vm/build_busybox.sh    # 首次：静态 busybox，源自动拉 1.37.0 定版进 third_party/，BUSYBOX_SRC 可覆盖
 scripts/vm/build_static.sh     # 桌面静态件（改了 C++ 之后跑这个）
 scripts/vm/build_initramfs.sh  # 打包 rootfs；FBDEV_TIMEOUT 定场时，VESPER_FBDEV_TRACE=1 开串口跟踪
 ```
 
-`build_static.sh` 与验收一样吃 `VISOR_ROOT`，过渡期指向锚点树 `~/visor-pin-4174f87`（见 CLAUDE.md 借壳红线的 tested-against）。
+`build_static.sh` 与验收一样吃 `VISOR_ROOT`（缺省仓旁兄弟树），过渡期指向锚点提交的物化只读树（见 CLAUDE.md 借壳红线的 tested-against）。
 
 ## 三种跑法
 

@@ -6,7 +6,7 @@
 
 这份清单是给作者拍板的决策底稿。每条缺口写四样：缺口是什么、成熟桌面的对应物（带 reference 标签）、visor 与 vesper 现状（有、无、半个，注明出处文件路径）、处置倾向三选一（回填 visor、vesper 自建、推迟）加一句理由。文末按条目标出小刀、中刀或大刀。
 
-核对基准。visor 侧全部结论来自对 `/home/charliechen/visor` 工作树的逐文件查看（HEAD `9294df8`，2026-10-16，与交接文档记载一致），其中「没有」的判断都做过全量检索（滚轮、定时器、剪贴板、菜单、spawn、文件与环境变量各查过一遍），不凭印象。vesper 侧现状是 `~/vesper` 仓只有 documents 与交接文档，代码一刀未开，所以 vesper 的「现状」一律引 `pack-26-desktop-handover.md` 的拍板与刀序。
+核对基准。visor 侧全部结论来自对 visor 工作树的逐文件查看（HEAD `9294df8`，2026-10-16，与交接文档记载一致），其中「没有」的判断都做过全量检索（滚轮、定时器、剪贴板、菜单、spawn、文件与环境变量各查过一遍），不凭印象。vesper 侧现状是 `~/vesper` 仓只有 documents 与交接文档，代码一刀未开，所以 vesper 的「现状」一律引 `pack-26-desktop-handover.md` 的拍板与刀序。
 
 两篇草稿已到稿。`window-and-session-theory.md` 与 `app-suite-survey.md` 在初版核对时不在 `documents/research/` 目录，本文按其余六篇草稿加交接文档先行成稿；2026-10-17 同日两稿落盘，本文随即补了一轮：窗口操作语义、焦点模型缝进第 1 节（新增 1.13 至 1.17），会话恢复的形状就地更新进 1.12，App 依赖映射里清单未覆盖的条目缝进第 2 节（新增 2.7 至 2.10），3.4 定时器就地补注销语义，完整性审查点名补进 1.18 与 1.19，工作量估计与第 5 节账目同步改写。旧条目编号一律不动，外部草稿对本文的既有引用不受影响。
 
@@ -438,8 +438,8 @@
 
 本地材料（本次核对的一手依据）：
 
-- /home/charliechen/visor 工作树，HEAD 9294df8（2026-10-16）。核对文件：include/visor/ui/widgets/widget.hpp、textbox/textbox.hpp、dropdown/dropdown.hpp、radio/radio.hpp、box/box.hpp、include/visor/ui/input_router.hpp、run_loop.hpp、dirty_regions.hpp、include/visor/bindings/events.hpp、host.hpp、x11/x11_window_host.hpp、x11/event_wire.hpp、cinux/event_wire.hpp、include/visor/base/containers/ring_queue.hpp、base/text/utf8.hpp、include/visor/draw/mono_font.hpp、src/ui/widgets/widget.cpp、src/bindings/cinux/event_wire.cpp、src/bindings/offscreen/offscreen_host.cpp、examples/x11_window.cpp、tests/gesture_tests.cpp。支撑第 1 至 3 节全部「现状」判断。
-- /home/charliechen/vesper/pack-26-desktop-handover.md。支撑第 0 节刀序、第 1.6、1.10、2.1、3.1、3.3 节的既定拍板。
+- visor 工作树（本机克隆），HEAD 9294df8（2026-10-16）。核对文件：include/visor/ui/widgets/widget.hpp、textbox/textbox.hpp、dropdown/dropdown.hpp、radio/radio.hpp、box/box.hpp、include/visor/ui/input_router.hpp、run_loop.hpp、dirty_regions.hpp、include/visor/bindings/events.hpp、host.hpp、x11/x11_window_host.hpp、x11/event_wire.hpp、cinux/event_wire.hpp、include/visor/base/containers/ring_queue.hpp、base/text/utf8.hpp、include/visor/draw/mono_font.hpp、src/ui/widgets/widget.cpp、src/bindings/cinux/event_wire.cpp、src/bindings/offscreen/offscreen_host.cpp、examples/x11_window.cpp、tests/gesture_tests.cpp。支撑第 1 至 3 节全部「现状」判断。
+- 本仓 pack-26-desktop-handover.md（2026-10-20 起瘦身并入 documents/desktop-roadmap.md）。支撑第 0 节刀序、第 1.6、1.10、2.1、3.1、3.3 节的既定拍板。
 - documents/research/kde-plasma-architecture.md。支撑 1.6（KWin）、2.3（KTextEditor）、3.4（RenderLoop）。
 - documents/research/gnome-architecture.md。支撑 1.1（PopupMenu）、2.3（Text Editor 判例）、第 5 节版本闸与分层。
 - documents/research/lightweight-and-classic-desktops.md。支撑第 0 节八件概念件表、1.3 与 1.5 与 1.8（Windows 95）、1.11（CDE）、2.4（Finder）。

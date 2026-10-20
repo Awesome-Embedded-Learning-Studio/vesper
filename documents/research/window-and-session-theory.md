@@ -243,7 +243,7 @@ ICCCM 第 5 节给 WM 的定位值得单独看：WM 自己也是会话客户端�
 
 本地材料：
 
-- /home/charliechen/vesper/pack-26-desktop-handover.md （D1 至 D6 刀面、宿主表现状、D5b Wayland 边界。支撑第 0、8 节）
+- 本仓 pack-26-desktop-handover.md（2026-10-20 起瘦身并入 documents/desktop-roadmap.md；D1 至 D6 刀面、宿主表现状、D5b Wayland 边界。支撑第 0、8 节）
 - documents/research/lightweight-and-classic-desktops.md （CDE 工作区占用列表、Windows 95 任务栏与 Alt+Tab 的 Z 序论据。支撑第 2.3、5、7.3 节）
 - documents/research/vesper-gap-analysis.md （1.3 焦点域、1.5 Z 序、1.6 resize、1.10 注册表、1.11 工作区、1.12 会话的既有拍板。支撑第 6.1、8 节）
 - documents/research/desktop-infrastructure.md （第 2 节会话拍板、第 6 节剪贴板裁定、第 7 节输入法两段链。支撑第 6.3、6.5、8.2 节）

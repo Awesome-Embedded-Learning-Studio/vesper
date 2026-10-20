@@ -220,4 +220,4 @@ vesper 第一版只有 1bpp 黑白，这不是缺陷，是路线：单色终端�
 - https://en.wikipedia.org/wiki/ANSI_escape_code — 支撑第 3 节 CSI 结构、SGR 参数族、ED/EL 变体、1049 与 2004 语义，及第 4 节 bracketed paste 存在理由。
 - https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c — 支撑第 5 节宽度分类（W/F 两格、Mn/Me 零格、歧义一格）。TR11 原文 https://www.unicode.org/reports/tr11/ 未单独核对，随 Kuhn 实现转引。
 - https://movq.de/blog/postings/2017-04-02/0/POSTING-en.html — 支撑第 4 节 PRIMARY/CLIPBOARD 双通道与 selection owner 机制。
-- 本地材料（无 URL，方法记录备查）：`bash.raw`/`vim.raw` 来自 /tmp/term_probe/ 下的 pty.fork 探针（2026-10-17 抓取，本文所有直方图与序列表的原始出处）。提示符 termios 快照来自对 bash 会话 tty 设备的 `stty -a`。vim t_ 选项值来自 vim 全屏会话内 `:set termcap` 重定向转储，t_RK 语义查自本机 /usr/share/vim/vim92/doc/term.txt。smcup/rmcup 旧式备用屏幕来自本机 `infocmp xterm-color`。旧仓设计底稿 /home/charliechen/Cinux-GUI/core/widget/terminal.cpp（478 行）支撑第 5 节调色板参考一说。
+- 本地材料（无 URL，方法记录备查）：`bash.raw`/`vim.raw` 来自 /tmp/term_probe/ 下的 pty.fork 探针（2026-10-17 抓取，本文所有直方图与序列表的原始出处）。提示符 termios 快照来自对 bash 会话 tty 设备的 `stty -a`。vim t_ 选项值来自 vim 全屏会话内 `:set termcap` 重定向转储，t_RK 语义查自本机 /usr/share/vim/vim92/doc/term.txt。smcup/rmcup 旧式备用屏幕来自本机 `infocmp xterm-color`。旧仓设计底稿 Cinux-GUI 的 core/widget/terminal.cpp（478 行）支撑第 5 节调色板参考一说。

@@ -1,6 +1,6 @@
 # visor 像素层提案底稿：三档像素与真彩渲染核（束 D 主体）
 
-> 起草日 2026-10-18 · 状态：待作者过目，随后作为上游提案带到 visor 会话 · 依据：documents/visor-upgrade-design.md 第 1.1、2、4 节，2026-10-18 彩色方向拍板，对 visor HEAD `4174f87` 逐文件核对
+> 起草日 2026-10-18 · 状态：已销案——上游以 `d8fc89f feat: 像素层三档，画布按格式实例化` 落地（2026-10-20 核对：pixel_traits、Canvas 按格式实例化、彩色预设、枚举三档、转换矩阵、X11 吃 RGB565、pixel_tests 全数到位） · 依据：documents/visor/upgrade-design.md 第 1.1、2、4 节，2026-10-18 彩色方向拍板，对 visor HEAD `4174f87` 逐文件核对
 
 ## 0. 这份文档是什么
 
@@ -82,6 +82,6 @@ X11 肉眼通道先行：开真彩窗口，RGB565 档直接写，桌面立刻看
 
 ## 9. 来源
 
-- documents/visor-upgrade-design.md（第 1.1 节编译期策略、第 2 节像素层细则、束 D 清单、第 4 节提案节奏）
+- documents/visor/upgrade-design.md（第 1.1 节编译期策略、第 2 节像素层细则、束 D 清单、第 4 节提案节奏）
 - visor HEAD `4174f87` 逐文件核对：canvas/color.hpp、ui/theme.hpp、ui/canvas_painter.hpp、canvas/mono_canvas.hpp、bindings/display.hpp
 - 2026-10-18 对话拍板：桌面彩色定案、图像加载分道（墨模先行、彩色解码等格式落定）

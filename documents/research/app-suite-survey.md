@@ -196,7 +196,7 @@ App 波次与 D 系列的关系是一条平行线：D5 到 D6 的宿主与进程
 
 本地材料：
 
-- /home/charliechen/vesper/pack-26-desktop-handover.md 支撑 §5 至 §7（App 口四动作、D 系列刀序、D6 进程边界拍板）。
+- 本仓 pack-26-desktop-handover.md（2026-10-20 起瘦身并入 documents/desktop-roadmap.md）支撑 §5 至 §7（App 口四动作、D 系列刀序、D6 进程边界拍板）。
 - documents/research/vesper-gap-analysis.md 支撑 §5 全部缺口编号与刀级、§7（修正一与修正二）。
 - documents/research/gnome-architecture.md 支撑 §2（Core 名册与分组、mcatanzaro 复盘的 file-roller 与 Screenshot 退位、Console 新写上位）。
 - documents/research/kde-plasma-architecture.md 支撑 §1（KTextEditor 归 Frameworks）。

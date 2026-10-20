@@ -21,7 +21,10 @@
 
 ## 构建
 
+依赖 [visor](https://github.com/Awesome-Embedded-Learning-Studio/visor)：先克隆到本仓旁边（或用 `-DVISOR_ROOT=...` 指向既有检出），缺省借的就是兄弟目录 `../visor`。
+
 ```bash
+git clone https://github.com/Awesome-Embedded-Learning-Studio/visor ../visor
 cmake -S . -B build -G Ninja
 cmake --build build
 ctest --test-dir build --output-on-failure
