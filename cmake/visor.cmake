@@ -3,10 +3,19 @@
 # an option on purpose -- visor's own CMakeLists resolves its include path
 # against CMAKE_SOURCE_DIR and requires X11 unconditionally, both of which only
 # hold while visor is the root project.
+#
+# Upstream: https://github.com/Awesome-Embedded-Learning-Studio/visor
 
-set(VISOR_ROOT "/home/charliechen/visor" CACHE PATH "visor source tree borrowed in place")
+# The default borrow is a sibling checkout (clone visor next to this repo);
+# point VISOR_ROOT elsewhere only for a tree that passes visor's own checks.
+if(NOT VISOR_ROOT)
+    set(VISOR_ROOT "${CMAKE_SOURCE_DIR}/../visor" CACHE FILEPATH "visor source tree borrowed in place" FORCE)
+endif()
 if(NOT EXISTS "${VISOR_ROOT}/include/visor/bindings/host.hpp")
-    message(FATAL_ERROR "VISOR_ROOT (${VISOR_ROOT}) carries no include/visor: a wrong tree was pointed at")
+    message(FATAL_ERROR
+        "VISOR_ROOT (${VISOR_ROOT}) carries no include/visor. Clone visor beside this repo"
+        " (git clone https://github.com/Awesome-Embedded-Learning-Studio/visor)"
+        " or set VISOR_ROOT to an existing checkout.")
 endif()
 
 add_library(visor.core INTERFACE)

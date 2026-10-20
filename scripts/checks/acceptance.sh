@@ -10,7 +10,7 @@ check_jobs="${VESPER_CHECK_JOBS:-4}"
 # The visor borrow points at the live tree by default. While the visor side
 # is mid-refactor, export VISOR_ROOT to a stable materialized pin (a
 # git-archive checkout) so this suite always runs against a whole tree.
-visor_root="${VISOR_ROOT:-/home/charliechen/visor}"
+visor_root="${VISOR_ROOT:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"/../visor}"
 
 echo "== 1/5 rel: configure, build, test =="
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \

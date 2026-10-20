@@ -10,7 +10,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$ROOT/build/vm/fbdev-static-build"
 BIN="$ROOT/build/vm/vesper-fbdev-static"
-VISOR="${VISOR_ROOT:-/home/charliechen/visor-pin-4174f87}"
+VISOR="${VISOR_ROOT:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"/../visor}"
 
 log() { printf '[fbdev-static] %s\n' "$*"; }
 die() { log "FAIL: $*"; exit 1; }
