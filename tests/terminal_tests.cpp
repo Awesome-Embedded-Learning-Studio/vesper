@@ -9,7 +9,7 @@
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
 #include "visor/bindings/events.hpp"
-#include "visor/canvas/mono_canvas.hpp"
+#include "visor/canvas/canvas.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
 #include "visor/ui/run_loop.hpp"

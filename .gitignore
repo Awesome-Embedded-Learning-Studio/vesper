@@ -1,6 +1,7 @@
 build/
 build-asan/
 build-tsan/
-third_party/
+third_party/*
+!third_party/visor
 .cache/
 .claude/

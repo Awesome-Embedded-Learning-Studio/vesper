@@ -10,14 +10,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$ROOT/build/vm/fbdev-static-build"
 BIN="$ROOT/build/vm/vesper-fbdev-static"
-VISOR="${VISOR_ROOT:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"/../visor}"
-
 log() { printf '[fbdev-static] %s\n' "$*"; }
 die() { log "FAIL: $*"; exit 1; }
 
-log "build: fbdev_desktop (static) against $VISOR"
+log "build: fbdev_desktop (static)"
 cmake -S "$ROOT" -B "$OUT" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_COMPILER=g++ -DVISOR_ROOT="$VISOR" \
+  -DCMAKE_CXX_COMPILER=g++ \
   -DCMAKE_CXX_FLAGS="-static" \
   -DCMAKE_EXE_LINKER_FLAGS="-static" >/dev/null
 cmake --build "$OUT" --parallel "$(nproc)" --target fbdev_desktop >/dev/null

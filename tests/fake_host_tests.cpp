@@ -8,7 +8,7 @@
 #include "visor/base/geometry/size.hpp"
 #include "visor/bindings/display.hpp"
 #include "visor/bindings/events.hpp"
-#include "visor/canvas/mono_canvas.hpp"
+#include "visor/canvas/canvas.hpp"
 
 #include <cstddef>
 #include <cstdint>
