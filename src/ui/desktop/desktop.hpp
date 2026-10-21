@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-#include "desktop/style.hpp"
+#include "ui/style/style.hpp"
 
 #include "visor/base/geometry/rect.hpp"
 #include "visor/draw/mono_bitmap.hpp"

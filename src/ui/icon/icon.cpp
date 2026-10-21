@@ -1,6 +1,6 @@
-#include "desktop/icon.hpp"
+#include "ui/icon/icon.hpp"
 
-#include "desktop/style.hpp"
+#include "ui/style/style.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"

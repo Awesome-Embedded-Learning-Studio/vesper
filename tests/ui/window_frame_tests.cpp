@@ -1,10 +1,10 @@
 #include "cases.hpp"
 #include "testing.hpp"
 
-#include "desktop/desktop.hpp"
-#include "desktop/window_frame.hpp"
 #include "fonts/demo_font.hpp"
 #include "host/fake_session_host.hpp"
+#include "ui/desktop/desktop.hpp"
+#include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"

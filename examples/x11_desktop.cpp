@@ -2,18 +2,18 @@
 // X11. The acceptance builds it, the human runs it (a display is needed); a
 // double click on an icon opens that icon's window and lifts it to the top,
 // its X box hides it again, quitting is the window manager's X button.
-#include "assets/pbm.hpp"
-#include "desktop/desktop.hpp"
-#include "desktop/icon.hpp"
-#include "desktop/pty_source.hpp"
-#include "desktop/style.hpp"
-#include "desktop/terminal.hpp"
-#include "desktop/window_frame.hpp"
-#include "desktop_icons.hpp"
+#include "base/libpbm/pbm.hpp"
 #include "fonts/term_font.hpp"
 #include "fonts/title_font.hpp"
 #include "fonts/ui_font.hpp"
 #include "host/pty.hpp"
+#include "icons/desktop_icons.hpp"
+#include "ui/desktop/desktop.hpp"
+#include "ui/icon/icon.hpp"
+#include "ui/pty_source/pty_source.hpp"
+#include "ui/style/style.hpp"
+#include "ui/terminal/terminal.hpp"
+#include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"

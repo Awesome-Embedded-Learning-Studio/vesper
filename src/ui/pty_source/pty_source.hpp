@@ -2,8 +2,8 @@
 
 #include <string_view>
 
-#include "desktop/terminal.hpp"
 #include "host/pty.hpp"
+#include "ui/terminal/terminal.hpp"
 
 namespace vesper::desktop {
 

@@ -1,7 +1,7 @@
-#include "desktop/pty_source.hpp"
+#include "ui/pty_source/pty_source.hpp"
 
-#include "desktop/terminal.hpp"
 #include "host/pty.hpp"
+#include "ui/terminal/terminal.hpp"
 
 #include <array>
 #include <cstddef>

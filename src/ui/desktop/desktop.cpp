@@ -1,6 +1,6 @@
-#include "desktop/desktop.hpp"
+#include "ui/desktop/desktop.hpp"
 
-#include "desktop/style.hpp"
+#include "ui/style/style.hpp"
 
 #include <algorithm>
 

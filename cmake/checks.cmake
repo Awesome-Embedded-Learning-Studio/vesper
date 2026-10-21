@@ -9,6 +9,7 @@ find_program(VESPER_CLANG_TIDY NAMES clang-tidy)
 file(GLOB_RECURSE VESPER_FORMAT_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/src/*.hpp
     ${CMAKE_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/assets/*.hpp
     ${CMAKE_SOURCE_DIR}/examples/*.cpp
     ${CMAKE_SOURCE_DIR}/tests/*.hpp
     ${CMAKE_SOURCE_DIR}/tests/*.cpp)

@@ -34,21 +34,24 @@ if(VESPER_TSAN)
     add_link_options(-fsanitize=thread)
 endif()
 
-# The desktop layer: session double, desktop root, the window frame and icons.
+# The three layers: base decodes assets, ui carries the desktop modules, host
+# wires the machine.
 add_library(
     vesper.ui STATIC
-    src/assets/pbm.cpp
-    src/desktop/desktop.cpp
-    src/desktop/icon.cpp
-    src/desktop/pty_source.cpp
-    src/desktop/terminal.cpp
-    src/desktop/window_frame.cpp
+    src/base/libpbm/pbm.cpp
+    src/ui/desktop/desktop.cpp
+    src/ui/icon/icon.cpp
+    src/ui/pty_source/pty_source.cpp
+    src/ui/terminal/terminal.cpp
+    src/ui/window_frame/window_frame.cpp
     src/host/evdev_input.cpp
     src/host/fake_session_host.cpp
     src/host/fbdev_device.cpp
     src/host/keymap.cpp
     src/host/pty.cpp)
-target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src)
+# The asset headers live outside src as art, so assets/ joins the include
+# path: fonts arrive as "fonts/...", icons as "icons/...".
+target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/assets)
 target_link_libraries(vesper.ui PUBLIC visor.ui visor.host)
 
 enable_testing()

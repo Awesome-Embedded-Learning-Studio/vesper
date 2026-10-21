@@ -1,6 +1,7 @@
-#include "desktop/terminal.hpp"
+#include "ui/terminal/terminal.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -19,6 +20,36 @@ namespace vesper::desktop {
 
 using visor::base::PointI;
 using visor::base::RectI;
+
+namespace {
+
+/// One key code to the single byte a byte source expects; false when the
+/// code names nothing byte-shaped. The named keys carry key-block numbers
+/// rather than code points, so each is spelled out, and kKeySpace needs the
+/// case before the band sees it: by the events convention 57 means the
+/// space bar to this consumer, not the digit '9' it doubles as on the wire.
+[[nodiscard]] bool byte_for_key(std::uint32_t code, char& out) noexcept {
+    switch (code) {
+        case visor::host::kKeyBackspace:
+            out = '\b';
+            return true;
+        case visor::host::kKeyEnter:
+            out = '\n';
+            return true;
+        case visor::host::kCharSpace:
+        case visor::host::kKeySpace:
+            out = ' ';
+            return true;
+        default:
+            if (code > visor::host::kCharSpace && code <= 0x7e) {
+                out = static_cast<char>(code);
+                return true;
+            }
+            return false;
+    }
+}
+
+} // namespace
 
 Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font) noexcept
     : Widget{bounds}, font_{font} {
@@ -67,7 +98,7 @@ void Terminal::receive(std::string_view bytes) noexcept {
             continue;
         }
         if (esc_ == EscState::Bracket) {
-            if (byte >= '0' && byte <= '9') {
+            if (std::isdigit(byte) != 0) {
                 csi_params_[static_cast<std::size_t>(csi_param_count_)] =
                     (csi_params_[static_cast<std::size_t>(csi_param_count_)] * 10) + (byte - '0');
             } else if (byte == ';') {
@@ -179,15 +210,7 @@ void Terminal::on_key_down(std::uint32_t code, visor::host::Modifiers modifiers)
     // convention), so the modifiers add nothing to a byte the code point
     // already names.
     char byte = 0;
-    if (code == visor::host::kKeyBackspace) {
-        byte = '\b';
-    } else if (code == visor::host::kKeyEnter) {
-        byte = '\n';
-    } else if (code == visor::host::kCharSpace || code == visor::host::kKeySpace) {
-        byte = ' ';
-    } else if (code > visor::host::kCharSpace && code <= 0x7e) {
-        byte = static_cast<char>(code);
-    } else {
+    if (!byte_for_key(code, byte)) {
         return;
     }
     if (source_ != nullptr) {

@@ -15,7 +15,7 @@ Run from the repository root, then cut the header with fontgen:
     scripts/fonts/rasterize_bdf.py --font <face.ttf> --size 8 \
         --range 0x20:0x7e --output scripts/fonts/ui8.bdf
     fontgen bdf scripts/fonts/ui8.bdf <raw.hpp> --range 0x20:0x7e --name ui8
-    scripts/fonts/adapt_font_header.py <raw.hpp> src/fonts/ui_font.hpp \
+    scripts/fonts/adapt_font_header.py <raw.hpp> assets/fonts/ui_font.hpp \
         --namespace vesper::fonts --view kUiFont
 """
 

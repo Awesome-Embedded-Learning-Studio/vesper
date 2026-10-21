@@ -1,6 +1,7 @@
-#include "assets/pbm.hpp"
+#include "base/libpbm/pbm.hpp"
 
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -21,9 +22,7 @@ void skip_blanks_and_comments(std::span<const std::uint8_t> bytes, std::size_t& 
             }
             continue;
         }
-        const bool blank = byte == ' ' || byte == '\t' || byte == '\r' || byte == '\n' ||
-                           byte == '\v' || byte == '\f';
-        if (!blank) {
+        if (std::isspace(byte) == 0) {
             return;
         }
         ++cursor;
@@ -34,11 +33,11 @@ void skip_blanks_and_comments(std::span<const std::uint8_t> bytes, std::size_t& 
 // 65535 sanity cap before it can overflow size_t arithmetic.
 [[nodiscard]] bool parse_dimension(std::span<const std::uint8_t> bytes, std::size_t& cursor,
                                    std::size_t& value, bool& absurd) noexcept {
-    if (cursor >= bytes.size() || bytes[cursor] < '0' || bytes[cursor] > '9') {
+    if (cursor >= bytes.size() || std::isdigit(bytes[cursor]) == 0) {
         return false;
     }
     std::size_t parsed = 0;
-    while (cursor < bytes.size() && bytes[cursor] >= '0' && bytes[cursor] <= '9') {
+    while (cursor < bytes.size() && std::isdigit(bytes[cursor]) != 0) {
         parsed = (parsed * 10) + static_cast<std::size_t>(bytes[cursor] - '0');
         if (parsed > 65535) {
             absurd = true;
@@ -79,10 +78,7 @@ PbmImage decode_pbm(std::span<const std::uint8_t> bytes) noexcept {
         image.error = PbmError::Truncated;
         return image;
     }
-    const std::uint8_t closing = bytes[cursor];
-    const bool blank = closing == ' ' || closing == '\t' || closing == '\r' || closing == '\n' ||
-                       closing == '\v' || closing == '\f';
-    if (!blank) {
+    if (std::isspace(bytes[cursor]) == 0) {
         image.error = PbmError::BadHeader;
         return image;
     }

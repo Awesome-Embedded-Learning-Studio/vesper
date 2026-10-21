@@ -1,7 +1,7 @@
 #include "cases.hpp"
 #include "testing.hpp"
 
-#include "assets/pbm.hpp"
+#include "base/libpbm/pbm.hpp"
 
 #include <array>
 #include <cstdint>

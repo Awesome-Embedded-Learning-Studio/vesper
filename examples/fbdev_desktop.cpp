@@ -9,19 +9,19 @@
 // run the loop -- the table filled is visor's, not the old repo's ABI. The guest's /init finds both
 // by name; a run ends by SIGTERM from the surrounding `timeout`, there is no close button a bare
 // framebuffer could own.
-#include "desktop/desktop.hpp"
-#include "desktop/icon.hpp"
-#include "desktop/pty_source.hpp"
-#include "desktop/style.hpp"
-#include "desktop/terminal.hpp"
-#include "desktop/window_frame.hpp"
-#include "desktop_icons.hpp"
 #include "fonts/term_font.hpp"
 #include "fonts/title_font.hpp"
 #include "fonts/ui_font.hpp"
 #include "host/evdev_input.hpp"
 #include "host/fbdev_device.hpp"
 #include "host/pty.hpp"
+#include "icons/desktop_icons.hpp"
+#include "ui/desktop/desktop.hpp"
+#include "ui/icon/icon.hpp"
+#include "ui/pty_source/pty_source.hpp"
+#include "ui/style/style.hpp"
+#include "ui/terminal/terminal.hpp"
+#include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"

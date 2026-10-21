@@ -1,6 +1,6 @@
-#include "desktop/window_frame.hpp"
+#include "ui/window_frame/window_frame.hpp"
 
-#include "desktop/style.hpp"
+#include "ui/style/style.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"

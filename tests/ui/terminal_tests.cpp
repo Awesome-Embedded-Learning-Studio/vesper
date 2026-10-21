@@ -1,9 +1,9 @@
 #include "cases.hpp"
 #include "testing.hpp"
 
-#include "desktop/terminal.hpp"
 #include "fonts/demo_font.hpp"
 #include "host/fake_session_host.hpp"
+#include "ui/terminal/terminal.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
