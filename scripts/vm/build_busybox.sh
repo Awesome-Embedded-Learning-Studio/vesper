@@ -14,6 +14,8 @@ SRC="${BUSYBOX_SRC:-$ROOT/third_party/busybox}"
 # against; bump deliberately, not by chasing the latest.
 BUSYBOX_VERSION="1.37.0"
 TARBALL="busybox-${BUSYBOX_VERSION}.tar.bz2"
+# Same pin discipline as the kernel: version plus checksum, checked on arrival.
+BUSYBOX_SHA256="3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4"
 OUT="$ROOT/build/vm/busybox-build"
 INSTALL="$ROOT/build/vm/busybox-root"
 
@@ -25,6 +27,8 @@ if [[ ! -f "$SRC/Makefile" ]]; then
   mkdir -p "$ROOT/third_party"
   curl -fL --http1.1 --retry 3 -o "$ROOT/third_party/${TARBALL}" \
     "https://busybox.net/downloads/${TARBALL}"
+  echo "${BUSYBOX_SHA256}  $ROOT/third_party/${TARBALL}" | sha256sum -c - \
+    || die "checksum mismatch on ${TARBALL} -- the pin is the checksum, not the URL"
   tar -C "$ROOT/third_party" -xjf "$ROOT/third_party/${TARBALL}"
   mv "$ROOT/third_party/busybox-${BUSYBOX_VERSION}" "$SRC"
 fi

@@ -17,6 +17,9 @@ BZIMAGE="$OUT/arch/x86/boot/bzImage"
 # against; bump deliberately, not by chasing the latest.
 KERNEL_VERSION="6.18.57"
 TARBALL="linux-${KERNEL_VERSION}.tar.xz"
+# The checksum is the pin: anyone running this script fetches the same
+# bytes, and a drift from cdn.kernel.org fails loudly instead of building.
+KERNEL_SHA256="5bd9acdc82ec5efc3790ae840e5aaa40dfde7efff261cf6dde902dc570acf98c"
 
 log() { printf '[kernel] %s\n' "$*"; }
 die() { log "FAIL: $*"; exit 1; }
@@ -27,6 +30,8 @@ if [[ ! -f "$SRC/Makefile" ]]; then
   log "source absent: fetching ${TARBALL} from cdn.kernel.org"
   curl -fL --http1.1 --retry 3 -o "$ROOT/third_party/${TARBALL}" \
     "https://cdn.kernel.org/pub/linux/kernel/v6.x/${TARBALL}"
+  echo "${KERNEL_SHA256}  $ROOT/third_party/${TARBALL}" | sha256sum -c - \
+    || die "checksum mismatch on ${TARBALL} -- the pin is the checksum, not the URL"
   log "extract: $SRC"
   tar -C "$ROOT/third_party" -xJf "$ROOT/third_party/${TARBALL}"
   mv "$ROOT/third_party/linux-${KERNEL_VERSION}" "$SRC"

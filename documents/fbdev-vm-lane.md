@@ -13,7 +13,7 @@ scripts/vm/build_static.sh     # 桌面静态件（改了 C++ 之后跑这个）
 scripts/vm/build_initramfs.sh  # 打包 rootfs；FBDEV_TIMEOUT 定场时，VESPER_FBDEV_TRACE=1 开串口跟踪
 ```
 
-`build_static.sh` 走 `third_party/visor` 子模块（锚点见 CLAUDE.md 借壳红线的 tested-against）。
+`build_static.sh` 走 `third_party/visor` 子模块（锚点见 CLAUDE.md 借壳红线的 tested-against）。内核与 busybox 的钉是定版号加 SHA-256 校验和，写死在各自脚本里，拉下来验不过就大声失败：验证流对任何人可复现，同一字节进、同一判例出。
 
 ## 三种跑法
 
