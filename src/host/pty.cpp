@@ -9,7 +9,9 @@
 #include <string_view>
 #include <vector>
 
+#include <asm-generic/ioctls.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -116,6 +118,16 @@ std::optional<PtySession> PtySession::open(const char* path, std::span<const cha
         static_cast<void>(::fcntl(master, F_SETFL, static_cast<int>(mixed)));
     }
     return PtySession{master, static_cast<int>(pid)};
+}
+
+bool PtySession::set_winsize(int cols, int rows) const noexcept {
+    if (master_ < 0 || cols <= 0 || rows <= 0) {
+        return false;
+    }
+    ::winsize size{};
+    size.ws_row = static_cast<unsigned short>(rows);
+    size.ws_col = static_cast<unsigned short>(cols);
+    return ::ioctl(master_, TIOCSWINSZ, &size) == 0;
 }
 
 bool PtySession::write_master(std::string_view bytes) noexcept {

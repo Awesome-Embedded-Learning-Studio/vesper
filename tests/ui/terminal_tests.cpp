@@ -15,8 +15,19 @@
 #include "visor/ui/run_loop.hpp"
 
 #include <cstddef>
+#include <string>
+#include <string_view>
 
 namespace {
+
+/// Writes down every byte the program receives, the judgment's witness for
+/// the words the keyboard sends (the loopback cannot testify: it eats the
+/// bytes into the screen).
+class RecordingSource final : public vesper::desktop::TerminalSource {
+  public:
+    void send(std::string_view bytes) noexcept override { sent.append(bytes); }
+    std::string sent;
+};
 
 using vesper::desktop::LoopbackSource;
 using vesper::desktop::Terminal;
@@ -247,6 +258,47 @@ void run_terminal_tests() {
         VESPER_CHECK_EQ(term.cell(0, 0), ' ');
         VESPER_CHECK_EQ(term.cell(2, 1), ' ');
         VESPER_CHECK_EQ(term.cursor_col(), 3);
+    }
+
+    // vt100's four cursor arrows on the wire: A up, B down, C right, D left.
+    // Zero and a missing parameter both mean one step, and the screen's
+    // edges clamp the move. The redraw a line editor sends when it walks
+    // history is this judgment's stage: carriage return homes the pen, CSI C
+    // skips the prompt, CSI K clears the line from there, and the content
+    // lands past the prompt -- the prompt itself survives, which a skipped
+    // CSI C used to erase.
+    {
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("> l");    // the prompt and a one-letter word, cursor at 3
+        term.receive("\x1b[D"); // one left
+        VESPER_CHECK_EQ(term.cursor_col(), 2);
+        term.receive("\x1b[2D"); // two left
+        VESPER_CHECK_EQ(term.cursor_col(), 0);
+        term.receive("\x1b[9D"); // clamped at the left edge
+        VESPER_CHECK_EQ(term.cursor_col(), 0);
+        term.receive("\x1b[C"); // one right
+        VESPER_CHECK_EQ(term.cursor_col(), 1);
+        term.receive("\x1b[9C"); // clamped inside the 4-wide screen
+        VESPER_CHECK_EQ(term.cursor_col(), 3);
+        term.receive("\x1b[B"); // one down
+        VESPER_CHECK_EQ(term.cursor_row(), 1);
+        term.receive("\x1b[9B"); // clamped at the bottom
+        VESPER_CHECK_EQ(term.cursor_row(), 2);
+        term.receive("\x1b[2A"); // two up
+        VESPER_CHECK_EQ(term.cursor_row(), 0);
+
+        // The history walk itself: home, skip the prompt, clear the rest,
+        // write the new word.
+        term.receive("\r");      // home
+        term.receive("\x1b[2C"); // skip "> "
+        VESPER_CHECK_EQ(term.cursor_col(), 2);
+        term.receive("\x1b[K");                // clear the word from the pen on
+        VESPER_CHECK_EQ(term.cell(0, 0), '>'); // the prompt survives
+        VESPER_CHECK_EQ(term.cell(1, 0), ' ');
+        VESPER_CHECK_EQ(term.cell(2, 0), ' '); // the old word is gone
+        term.receive("ec");                    // the new word arrives
+        VESPER_CHECK_EQ(term.cell(2, 0), 'e');
+        VESPER_CHECK_EQ(term.cell(3, 0), 'c');
     }
 
     // A sequence split across two receive() calls still lands: the escape

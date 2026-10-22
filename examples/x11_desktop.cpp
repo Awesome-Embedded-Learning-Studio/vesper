@@ -239,15 +239,19 @@ int main(int argc, char** argv) {
                          "Terminal", vesper::fonts::title::kTitleFont, kWorkArea};
     Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont};
     // The program behind the screen: bash on a pty. --norc keeps the
-    // machine's rc files out of a demo, TERM=dumb keeps readline's fancy
-    // moves calm, and PS1 is a plain "> " that the font can draw.
+    // machine's rc files out of a demo, TERM=vt100 gives clear its escape
+    // words (a dumb terminal has no clear to send) and readline's arrows a
+    // CSI the screen speaks, and PS1 is a plain "> " that the font can draw.
     constexpr std::array<const char*, 3> bash_args{"bash", "--norc", "-i"};
-    constexpr std::array<const char*, 2> bash_env{"TERM=dumb", "PS1=> "};
+    constexpr std::array<const char*, 2> bash_env{"TERM=vt100", "PS1=> "};
     auto bash_session = vesper::host::PtySession::open("/bin/bash", bash_args, bash_env);
     if (!bash_session.has_value()) {
         std::println(stderr, "vesper: cannot spawn bash under a pty");
         return 1;
     }
+    // The line editor redraws against the screen's own grid, not a guessed
+    // default: the terminal's cell count is the pty's window size.
+    static_cast<void>(bash_session->set_winsize(term.cols(), term.rows()));
     PtySource term_source{term, *bash_session};
     term.set_source(&term_source);
     Opener term_opener{.win = &term_win, .take_focus = &term};

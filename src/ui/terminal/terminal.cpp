@@ -200,22 +200,74 @@ void Terminal::apply_csi(unsigned char final_byte) noexcept {
         // Cursor position, 1-based row;column; defaults and zeros both home.
         cursor_row_ = std::clamp(std::max(first, 1) - 1, 0, rows_ - 1);
         cursor_col_ = std::clamp(std::max(second, 1) - 1, 0, cols_ - 1);
+    } else if (final_byte == 'A' || final_byte == 'B' || final_byte == 'C' || final_byte == 'D') {
+        // vt100's own four: A up, B down, C right, D left. Zero and a missing
+        // parameter both mean one step, and the screen's edges clamp the
+        // move -- a plain arrow never wraps. These are the words a line
+        // editor's redraw speaks: carriage return homes the pen, CSI C skips
+        // the prompt, CSI K clears from there, and the prompt survives
+        // because the skip landed the pen past it.
+        const int steps = std::max(first, 1);
+        switch (final_byte) {
+            case 'A':
+                cursor_row_ = std::max(cursor_row_ - steps, 0);
+                break;
+            case 'B':
+                cursor_row_ = std::min(cursor_row_ + steps, rows_ - 1);
+                break;
+            case 'C':
+                cursor_col_ = std::min(cursor_col_ + steps, cols_ - 1);
+                break;
+            case 'D':
+                cursor_col_ = std::max(cursor_col_ - steps, 0);
+                break;
+            default:
+                break;
+        }
     }
     // Every other final byte is swallowed: parsed, not obeyed.
 }
 
 void Terminal::on_key_down(std::uint32_t code, visor::host::Modifiers modifiers) noexcept {
-    static_cast<void>(modifiers);
     // Printable codes already carry the host's shift folding (the text-host
-    // convention), so the modifiers add nothing to a byte the code point
-    // already names.
+    // convention); the ctrl bit is folded here, the one modifier that
+    // changes the byte a terminal sends.
+    if (source_ == nullptr) {
+        return;
+    }
+    // The arrows are the one named pair this screen forwards instead of
+    // eating: a readline behind a pty asks for history as vt100 CSI words,
+    // and a desk claiming TERM=vt100 owes them. The screen's own receive()
+    // has no cursor-motion CSI, so a loopback of these words paints nothing
+    // here -- the pty is where they matter.
+    switch (code) {
+        case visor::host::kKeyUp:
+            source_->send("\x1b[A");
+            return;
+        case visor::host::kKeyDown:
+            source_->send("\x1b[B");
+            return;
+        case visor::host::kKeyRight:
+            source_->send("\x1b[C");
+            return;
+        case visor::host::kKeyLeft:
+            source_->send("\x1b[D");
+            return;
+        default:
+            break;
+    }
     char byte = 0;
     if (!byte_for_key(code, byte)) {
         return;
     }
-    if (source_ != nullptr) {
-        source_->send(std::string_view{&byte, 1});
+    // Ctrl + letter is the keyboard's oldest fold: the control byte the
+    // letter's low five bits name -- Ctrl+C is INTR (0x03), the interrupt a
+    // shell answers to, Ctrl+D is EOF (0x04). A ctrl held over anything but
+    // a letter adds nothing this screen sends.
+    if (modifiers.ctrl && byte >= 'a' && byte <= 'z') {
+        byte = static_cast<char>(static_cast<unsigned char>(byte) & 0x1fU);
     }
+    source_->send(std::string_view{&byte, 1});
 }
 
 void Terminal::put(unsigned char byte) noexcept {

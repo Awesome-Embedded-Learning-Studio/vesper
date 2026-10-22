@@ -57,6 +57,14 @@ class PtySession {
     /// The master's descriptor, for the caller's poll().
     [[nodiscard]] int master_fd() const noexcept { return master_; }
 
+    /// Tells the child how wide and tall its terminal is, in cells. Without
+    /// this a line editor guesses a default width and redraws its line
+    /// against the wrong wrap, which a screen of a different width shows as
+    /// misplaced prompts and half-drawn rows. The kernel hands the change to
+    /// the child as SIGWINCH, the line editor's own repaint cue. False when
+    /// the ioctl failed, a dead session's answer.
+    [[nodiscard]] bool set_winsize(int cols, int rows) const noexcept;
+
     /// Whether the child side has reported itself gone.
     [[nodiscard]] bool child_gone() const noexcept { return gone_; }
 

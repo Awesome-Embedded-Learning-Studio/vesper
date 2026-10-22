@@ -307,16 +307,20 @@ int main(int argc, const char* const* argv) {
     Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont};
     // The program behind the screen: a plain POSIX shell on a pty. busybox
     // ash is the initramfs citizen; /bin/sh is the same citizen on a dev
-    // machine's console run. TERM=dumb keeps the prompt calm, PS1 is a
-    // plain "> " the font can draw.
+    // machine's console run. TERM=vt100 gives clear its escape words (a
+    // dumb terminal has no clear to send), PS1 is a plain "> " the font can
+    // draw.
     constexpr std::array<const char*, 2> sh_args{"sh", "-i"};
-    constexpr std::array<const char*, 2> sh_env{"TERM=dumb", "PS1=> "};
+    constexpr std::array<const char*, 2> sh_env{"TERM=vt100", "PS1=> "};
     auto sh_session = vesper::host::PtySession::open("/bin/sh", sh_args, sh_env);
     if (!sh_session.has_value()) {
         std::println(stderr, "vesper-fbdev: cannot spawn /bin/sh under a pty: {}",
                      std::strerror(errno));
         return 1;
     }
+    // The line editor redraws against the screen's own grid, not a guessed
+    // default: the terminal's cell count is the pty's window size.
+    static_cast<void>(sh_session->set_winsize(term.cols(), term.rows()));
     PtySource term_source{term, *sh_session};
     term.set_source(&term_source);
     Opener term_opener{.win = &term_win, .take_focus = &term};
