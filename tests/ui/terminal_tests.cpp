@@ -9,6 +9,8 @@
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
 #include "visor/bindings/events.hpp"
+#include "visor/bindings/events/key_words.hpp"
+#include "visor/bindings/events/modifiers.hpp"
 #include "visor/canvas/canvas.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"

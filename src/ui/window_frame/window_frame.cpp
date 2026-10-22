@@ -6,7 +6,7 @@
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
 #include "visor/base/helpers/rect_helper.hpp"
-#include "visor/bindings/events.hpp"
+#include "visor/bindings/events/modifiers.hpp"
 #include "visor/canvas/color.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/painter.hpp"

@@ -7,6 +7,7 @@
 #include <variant>
 
 #include "visor/bindings/events.hpp"
+#include "visor/bindings/events/key_words.hpp"
 
 namespace vesper::host {
 namespace {
