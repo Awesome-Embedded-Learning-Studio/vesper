@@ -312,13 +312,16 @@ void Terminal::on_draw(const visor::ui::Painter& painter) const noexcept {
                                          visor::canvas::ColorRole::Background, 1);
         }
     }
-    // The cursor is one unlit cell block, the classic solid caret.
+    // The cursor is one solid cell block in the scheme's accent -- on the
+    // mono screen it folds back to the unlit white it always was, and on a
+    // color desk it is the desk's gold, so the caret reads before any text
+    // does.
     const RectI caret{
         .pos = PointI{bounds().pos.x + (cursor_col_ * cell_w_),
                       bounds().pos.y + (cursor_row_ * cell_h_)},
         .size = visor::base::SizeI{.w = cell_w_, .h = cell_h_},
     };
-    painter.fill(caret, visor::canvas::ColorRole::Background);
+    painter.fill(caret, visor::canvas::ColorRole::Accent);
 }
 
 } // namespace vesper::desktop

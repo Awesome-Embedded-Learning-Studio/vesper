@@ -60,6 +60,17 @@ constexpr visor::draw::MonoBitmap kArt{
     .rows = kArtBits,
 };
 
+// The layered judgment's second layer: a full ring, so the whole border
+// lights under both inks and the last ink painted wins there.
+constexpr std::array<std::uint8_t, 8> kArt2Bits{
+    0xFF, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0xFF,
+};
+constexpr visor::draw::MonoBitmap kArt2{
+    .width = 8,
+    .height = 8,
+    .rows = kArt2Bits,
+};
+
 constexpr RectI kIconBounds{.pos = PointI{20, 20}, .size = SizeI{.w = 48, .h = 32}};
 constexpr PointI kIconCenter{kIconBounds.pos.x + (kIconBounds.size.w / 2),
                              kIconBounds.pos.y + (kIconBounds.size.h / 2)};
@@ -343,5 +354,45 @@ void run_icon_tests() {
         const int art_x = kIconBounds.pos.x + ((kIconBounds.size.w - 8) / 2);
         VESPER_CHECK_EQ(host.get(PointI{art_x, block_top}), style::kColorDeskTheme.accent.argb);
         VESPER_CHECK_EQ(host.get(PointI{art_x + 4, block_top + 1}), 0U); // hollow stays canvas
+    }
+    // The layered form: two bitmaps on one cell, each in its own ink. A
+    // point only the frame layer lights reads the scheme's gold, a point
+    // only the content layer lights reads the body ink, and a point
+    // neither lights keeps the canvas -- the layers are ink transfers,
+    // not grounds.
+    {
+        FakeColorHost host{480, 320};
+        using ColorFrame =
+            visor::canvas::Canvas<SizeI{.w = 480, .h = 320}, visor::canvas::Xrgb8888Traits>;
+        ColorFrame frame;
+        visor::ui::InputRouter input;
+        constexpr std::array<Icon::Layer, 2> layers = [] {
+            std::array<Icon::Layer, 2> built{};
+            built[0] = {
+                .art = &kArt,
+                .ink = visor::canvas::ColorRole::Accent,
+            };
+            built[1] = {
+                .art = &kArt2,
+                .ink = visor::canvas::ColorRole::Foreground,
+            };
+            return built;
+        }();
+        Icon icon{kIconBounds, layers, "DEMO", vesper::fonts::kDemoFont};
+        icon.set_theme(&style::kColorDeskTheme);
+        static_cast<void>(visor::ui::run_once(host.table(), icon, input, frame));
+        // A point only the first layer lights (row two's inner dot) reads
+        // the scheme's gold; the top row, lit by both layers, reads the
+        // last ink painted -- the body ink.
+        const int block_top =
+            kIconBounds.pos.y +
+            ((kIconBounds.size.h -
+              (8 + style::kCaptionGap + static_cast<int>(vesper::fonts::kDemoFont.line_height))) /
+             2);
+        const int art_x = kIconBounds.pos.x + ((kIconBounds.size.w - 8) / 2);
+        VESPER_CHECK_EQ(host.get(PointI{art_x + 2, block_top + 2}),
+                        style::kColorDeskTheme.accent.argb);
+        VESPER_CHECK_EQ(host.get(PointI{art_x, block_top}), style::kColorDeskTheme.foreground.argb);
+        VESPER_CHECK_EQ(host.get(PointI{art_x + 4, block_top + 3}), 0U); // neither lights it
     }
 }

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <span>
 #include <string_view>
+#include <vector>
 
 #include "visor/base/geometry/rect.hpp"
 #include "visor/bindings/events.hpp"
@@ -42,12 +44,21 @@ class Icon final : public visor::ui::Widget {
     ///        desktop's cue to move the selection here.
     using SelectHandler = void (*)(Icon& self, void* context);
 
-    /// bounds is the whole hit target. The art block and the caption line
-    /// ride centered inside it, as one block: art on top, caption directly
-    /// underneath. art_ink is the role the art paints in -- the caption
-    /// always takes the body ink, so the icon's art can carry its own color
-    /// while its name stays with the desk's text. The default keeps every
-    /// existing icon on the body ink.
+    /// One inked layer of art: a bitmap and the role it paints in. Layers
+    /// share one 24x24 cell and paint in order, so a later layer's ink
+    /// reads as sitting on the earlier one's.
+    struct Layer {
+        const visor::draw::MonoBitmap* art;
+        visor::canvas::ColorRole ink;
+    };
+
+    /// The layered form: every layer paints at the same centered block,
+    /// each in its own ink. An empty span paints nothing but the caption.
+    Icon(visor::base::RectI bounds, std::span<const Layer> layers, std::string_view caption,
+         const visor::draw::MonoFont& font) noexcept;
+
+    /// The single-bitmap form: one layer in one ink, the caption always in
+    /// the body ink. The default keeps every existing icon on the body ink.
     Icon(visor::base::RectI bounds, const visor::draw::MonoBitmap& art, std::string_view caption,
          const visor::draw::MonoFont& font,
          visor::canvas::ColorRole art_ink = visor::canvas::ColorRole::Foreground) noexcept;
@@ -74,8 +85,7 @@ class Icon final : public visor::ui::Widget {
     void on_draw(const visor::ui::Painter& painter) const noexcept override;
 
   private:
-    const visor::draw::MonoBitmap* art_;
-    visor::canvas::ColorRole art_ink_ = visor::canvas::ColorRole::Foreground;
+    std::vector<Layer> layers_;
     visor::draw::MonoFont font_;
     std::string_view caption_;
     ActivateHandler on_activate_ = nullptr;

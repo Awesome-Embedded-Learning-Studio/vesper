@@ -19,7 +19,9 @@ namespace vesper::host {
  * XRGB8888 (32bpp) is the supported layout today, the one QEMU's vga std
  * gives the bare guest; other layouts leave ready() false, the same honest
  * refusal as an empty table entry. The 16bpp (RGB565) lane waits on the
- * color core growing in visor upstream.
+ * color core growing in visor upstream. A color desk talks to the same
+ * frame through blit() (XRGB8888 regions, word for word), keeping expand()
+ * for mono canvases.
  *
  * Borrow note: adapted from Cinux-GUI@0b0c135 host/fbdev_device.{hpp,cpp}
  * (2026-10-20) -- the ioctl/mmap skeleton and the 32bpp-only stance are
@@ -51,6 +53,12 @@ class FbdevDevice {
     /// bit paints. Parts of @p rect outside the frame clip silently.
     void expand(visor::base::RectI rect, const std::uint8_t* mono, std::size_t mono_stride_bytes,
                 std::uint32_t on, std::uint32_t off) noexcept;
+
+    /// Copies one XRGB8888 region (four bytes per pixel, region-stride
+    /// rows) into the mapped frame, respecting the frame's own row pitch.
+    /// Parts of @p rect outside the frame clip silently.
+    void blit(visor::base::RectI rect, const std::uint8_t* pixels,
+              std::size_t stride_bytes) noexcept;
 
   private:
     int fd_ = -1;

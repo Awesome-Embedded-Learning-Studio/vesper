@@ -1,5 +1,7 @@
 #include "ui/icon/icon.hpp"
 
+#include <span>
+
 #include "ui/style/style.hpp"
 
 #include "visor/base/geometry/point.hpp"
@@ -22,9 +24,13 @@ using visor::base::RectI;
 using visor::base::SizeI;
 using visor::canvas::ColorRole;
 
+Icon::Icon(RectI bounds, std::span<const Layer> layers, std::string_view caption,
+           const visor::draw::MonoFont& font) noexcept
+    : Widget{bounds}, layers_{layers.begin(), layers.end()}, font_{font}, caption_{caption} {}
+
 Icon::Icon(RectI bounds, const visor::draw::MonoBitmap& art, std::string_view caption,
            const visor::draw::MonoFont& font, visor::canvas::ColorRole art_ink) noexcept
-    : Widget{bounds}, art_{&art}, art_ink_{art_ink}, font_{font}, caption_{caption} {}
+    : Widget{bounds}, layers_{{{.art = &art, .ink = art_ink}}}, font_{font}, caption_{caption} {}
 
 void Icon::set_on_activate(ActivateHandler handler, void* context) noexcept {
     on_activate_ = handler;
@@ -66,8 +72,8 @@ void Icon::on_draw(const visor::ui::Painter& painter) const noexcept {
     // is Foreground ink on the desktop's ground; parts outside the box clip
     // silently, and a caption wider than the box centers to a negative
     // offset that the clip trims to nothing on the leading side.
-    const int art_w = static_cast<int>(art_->width);
-    const int art_h = static_cast<int>(art_->height);
+    const int art_w = layers_.empty() ? 0 : static_cast<int>(layers_.front().art->width);
+    const int art_h = layers_.empty() ? 0 : static_cast<int>(layers_.front().art->height);
     const int caption_h = static_cast<int>(font_.line_height);
     const int block_h = art_h + style::kCaptionGap + caption_h;
     const int block_top = bounds().pos.y + ((bounds().size.h - block_h) / 2);
@@ -88,7 +94,9 @@ void Icon::on_draw(const visor::ui::Painter& painter) const noexcept {
     }
 
     const int art_x = bounds().pos.x + ((bounds().size.w - art_w) / 2);
-    painter.draw_bitmap(PointI{art_x, block_top}, *art_, art_ink_, 1);
+    for (const Layer& layer : layers_) {
+        painter.draw_bitmap(PointI{art_x, block_top}, *layer.art, layer.ink, 1);
+    }
 
     const visor::base::SizeI caption_size = visor::draw::measure_text(font_, caption_, 1);
     const int caption_x = bounds().pos.x + ((bounds().size.w - caption_size.w) / 2);

@@ -1,8 +1,10 @@
 #include "cases.hpp"
 #include "testing.hpp"
 
+#include "fake_color_host.hpp"
 #include "fonts/demo_font.hpp"
 #include "host/fake_session_host.hpp"
+#include "ui/style/theme.hpp"
 #include "ui/terminal/terminal.hpp"
 
 #include "visor/base/geometry/point.hpp"
@@ -12,6 +14,7 @@
 #include "visor/bindings/events/key_words.hpp"
 #include "visor/bindings/events/modifiers.hpp"
 #include "visor/canvas/canvas.hpp"
+#include "visor/canvas/pixel_traits.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
 #include "visor/ui/run_loop.hpp"
@@ -19,6 +22,8 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+
+namespace style = vesper::desktop::style;
 
 namespace {
 
@@ -33,6 +38,7 @@ class RecordingSource final : public vesper::desktop::TerminalSource {
 
 using vesper::desktop::LoopbackSource;
 using vesper::desktop::Terminal;
+using vesper::host::FakeColorHost;
 using visor::base::PointI;
 using visor::base::RectI;
 using visor::base::SizeI;
@@ -204,10 +210,11 @@ void run_terminal_tests() {
     }
 
     // The D3 flagship judgment: the 80x25 screen, off screen, one frame. The
-    // screen paints as an inverted box -- before any typing the only unlit
-    // pixels inside it are the caret's own 6x7 block, so the lit count is
-    // box-minus-caret exactly. Typing punches glyph holes, so the count
-    // drops, and the caret reads unlit at its new grid position.
+    // screen paints as an inverted box, fully lit before any typing: the
+    // caret paints the scheme's accent, which a mono screen folds back to
+    // lit -- the caret's own existence is the color judgment's word below,
+    // not this one's. Typing punches glyph holes, so the count drops, and
+    // the caret's block reads lit at its new grid position.
     {
         vesper::host::FakeSessionHost host{480, 320};
         Terminal term{kFullTerm, vesper::fonts::kDemoFont};
@@ -215,15 +222,16 @@ void run_terminal_tests() {
         term.set_source(&loop);
         Frame frame;
         visor::ui::render_window(term, frame, kScreenBounds, host.table());
-        VESPER_CHECK_EQ(lit_pixels(host), (480 * 175) - (6 * 7));
+        VESPER_CHECK_EQ(lit_pixels(host), 480 * 175);
 
         term.receive("OK");
         vesper::host::FakeSessionHost typed_host{480, 320};
         visor::ui::render_window(term, frame, kScreenBounds, typed_host.table());
-        VESPER_CHECK(lit_pixels(typed_host) < (480 * 175) - (6 * 7));
-        // The caret moved to column 2: its block reads unlit, and the ground
-        // at the box's far corner still reads lit.
-        VESPER_CHECK(!typed_host.get(PointI{13, 3}));
+        VESPER_CHECK(lit_pixels(typed_host) < 480 * 175);
+        // The caret moved to column 2: its block reads lit (the accent
+        // folds to ink on a mono screen), and the ground at the box's far
+        // corner still reads lit.
+        VESPER_CHECK(typed_host.get(PointI{13, 3}));
         VESPER_CHECK(typed_host.get(PointI{479, 174}));
         // Glyph ink: some pixel in the first two columns' band is unlit
         // while the box around it stays lit.
@@ -332,5 +340,21 @@ void run_terminal_tests() {
         VESPER_CHECK_EQ(term.cell(7, 0), ' ');
         VESPER_CHECK_EQ(term.cell(8, 0), 'B');
         VESPER_CHECK_EQ(term.cursor_col(), 9);
+    }
+    // The caret on a color canvas: one cell of the scheme's accent, the
+    // desk's gold, instead of the paper the mono screen folded it into.
+    {
+        FakeColorHost host{480, 175};
+        using ColorFrame =
+            visor::canvas::Canvas<SizeI{.w = 480, .h = 175}, visor::canvas::Xrgb8888Traits>;
+        ColorFrame frame;
+        visor::ui::InputRouter input;
+        Terminal term{kFullTerm, vesper::fonts::kDemoFont};
+        term.set_theme(&style::kColorDeskTheme);
+        static_cast<void>(visor::ui::run_once(host.table(), term, input, frame));
+        const int cell_w = static_cast<int>(vesper::fonts::kDemoFont.glyphs[0].advance);
+        const PointI caret_mid{cell_w / 2,
+                               static_cast<int>(vesper::fonts::kDemoFont.line_height) / 2};
+        VESPER_CHECK_EQ(host.get(caret_mid), style::kColorDeskTheme.accent.argb);
     }
 }

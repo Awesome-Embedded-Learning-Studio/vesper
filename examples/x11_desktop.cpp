@@ -216,10 +216,34 @@ int main(int argc, char** argv) {
                 .h = style::kIconSlotHeight,
             },
     };
-    Icon welcome_icon{welcome_slot, vesper::examples::kWindowArt, "WELCOME",
-                      vesper::fonts::ui::kUiFont, visor::canvas::ColorRole::Accent};
-    Icon term_icon{term_slot, vesper::examples::kTermArt, "TERMINAL", vesper::fonts::ui::kUiFont,
-                   visor::canvas::ColorRole::Muted};
+    // The layered art: a gold frame with ink glass, a muted body with a
+    // gold prompt. Both layers ride the same centered block.
+    constexpr std::array<Icon::Layer, 2> welcome_layers = [] {
+        std::array<Icon::Layer, 2> layers{};
+        layers[0] = {
+            .art = &vesper::examples::kWindowFrameArt,
+            .ink = visor::canvas::ColorRole::Accent,
+        };
+        layers[1] = {
+            .art = &vesper::examples::kWindowContentArt,
+            .ink = visor::canvas::ColorRole::Foreground,
+        };
+        return layers;
+    }();
+    constexpr std::array<Icon::Layer, 2> term_layers = [] {
+        std::array<Icon::Layer, 2> layers{};
+        layers[0] = {
+            .art = &vesper::examples::kTermBodyArt,
+            .ink = visor::canvas::ColorRole::Muted,
+        };
+        layers[1] = {
+            .art = &vesper::examples::kTermGoldArt,
+            .ink = visor::canvas::ColorRole::Accent,
+        };
+        return layers;
+    }();
+    Icon welcome_icon{welcome_slot, welcome_layers, "WELCOME", vesper::fonts::ui::kUiFont};
+    Icon term_icon{term_slot, term_layers, "TERMINAL", vesper::fonts::ui::kUiFont};
 
     WelcomePanel welcome{RectI{.pos = PointI{0, 0}, .size = SizeI{.w = 210, .h = 87}},
                          vesper::fonts::title::kTitleFont, vesper::fonts::ui::kUiFont};
