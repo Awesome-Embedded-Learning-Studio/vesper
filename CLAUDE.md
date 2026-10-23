@@ -19,7 +19,7 @@
 - 借壳源唯一：`third_party/visor` 子模块（2026-10-20 作者拍板，不留 VISOR_ROOT 一类逃生口）。钉就是 vesper 历史里的 gitlink，升级等于子模块指针前移一笔提交，两边验收都绿了才动。并排开发在子模块里 checkout 分支干活。
 - tested-against 记在本节：visor @ `2acb825`（wayland 后端、按键重复、事件族头分家、区域成批提交，主树消费方 include 随批对齐族头，含 `d8fc89f` 像素层三档落地，2026-10-22 实测全绿）。
 - **X11 与 Wayland 只进肉眼通道。** visor.host.x11、visor.host.wayland 只被 examples 的调试目标链接，不进主库、不进验收，验收以 fake host 为准。
-- 待补：D5b 收尾：桌面本体换 XRGB8888 色档。D2 的子表容量议题已随 visor `5bc71dc`（孩子表改侵入式链表）在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
+- 待补：彩色化后续：图标彩色资产（现为单色位图配主题墨色）、终端配色方案（现保持黑白反相）、fbdev 通道彩色档（现保持 Mono1，VM 判例不受牵连）。D5b 按 roadmap 字面收官（wayland 后端与 headless 判例在上游，扩色交付在链路上）；D2 议题已随 visor `5bc71dc` 在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
 
 ## 架构边界
 
