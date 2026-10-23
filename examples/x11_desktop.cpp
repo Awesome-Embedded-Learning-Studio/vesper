@@ -12,15 +12,18 @@
 #include "ui/icon/icon.hpp"
 #include "ui/pty_source/pty_source.hpp"
 #include "ui/style/style.hpp"
+#include "ui/style/theme.hpp"
 #include "ui/terminal/terminal.hpp"
 #include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
+#include "visor/bindings/display.hpp"
 #include "visor/bindings/x11/x11_window_host.hpp"
 #include "visor/canvas/canvas.hpp"
 #include "visor/canvas/color.hpp"
+#include "visor/canvas/pixel_traits.hpp"
 #include "visor/draw/mono_bitmap.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/dirty_regions.hpp"
@@ -60,20 +63,10 @@ constexpr RectI kWorkArea{
     .pos = PointI{0, 0},
     .size = SizeI{.w = kScreen.w, .h = kScreen.h - style::kPanelHeight},
 };
-using Frame = visor::canvas::Canvas<kScreen>;
+using Frame = visor::canvas::Canvas<kScreen, visor::canvas::Xrgb8888Traits>;
 
-// Rounded corners belong to the scheme, not to the widgets: every control
-// asks the theme, and a square scheme still paints square windows.
-const visor::ui::Theme kDeskTheme = [] {
-    visor::ui::Theme theme = visor::ui::kLightTheme;
-    theme.corner_radius = visor::ui::CornerRadius{
-        .top_left = 2,
-        .top_right = 2,
-        .bottom_right = 2,
-        .bottom_left = 2,
-    };
-    return theme;
-}();
+// The color face: dusk gold over warm paper, the scheme file's own table.
+constexpr const visor::ui::Theme& desk_theme = style::kColorDeskTheme;
 
 /// One column of three lines: a heading, a rule and two body lines in the
 /// smaller face. A plain Widget because the frame adopts exactly one content
@@ -167,7 +160,8 @@ void select_icon(Icon& self, void* context) noexcept {
 } // namespace
 
 int main(int argc, char** argv) {
-    auto opened = visor::host::x11::X11WindowHost::open(nullptr, kScreen.w, kScreen.h, 2);
+    auto opened = visor::host::x11::X11WindowHost::open(nullptr, kScreen.w, kScreen.h, 2,
+                                                        visor::host::PixelFormat::XRGB8888);
     if (!opened.has_value()) {
         std::println(stderr, "vesper: cannot open the display (is DISPLAY set?)");
         return 1;
@@ -192,7 +186,7 @@ int main(int argc, char** argv) {
         wallpaper_view = wallpaper_image.bitmap();
     }
 
-    Desktop desktop{kScreenBounds, "VESPER", vesper::fonts::title::kTitleFont, kDeskTheme};
+    Desktop desktop{kScreenBounds, "VESPER", vesper::fonts::title::kTitleFont, desk_theme};
     if (wallpaper_image.ok) {
         desktop.set_wallpaper(&wallpaper_view);
     }
@@ -223,8 +217,9 @@ int main(int argc, char** argv) {
             },
     };
     Icon welcome_icon{welcome_slot, vesper::examples::kWindowArt, "WELCOME",
-                      vesper::fonts::ui::kUiFont};
-    Icon term_icon{term_slot, vesper::examples::kTermArt, "TERMINAL", vesper::fonts::ui::kUiFont};
+                      vesper::fonts::ui::kUiFont, visor::canvas::ColorRole::Accent};
+    Icon term_icon{term_slot, vesper::examples::kTermArt, "TERMINAL", vesper::fonts::ui::kUiFont,
+                   visor::canvas::ColorRole::Muted};
 
     WelcomePanel welcome{RectI{.pos = PointI{0, 0}, .size = SizeI{.w = 210, .h = 87}},
                          vesper::fonts::title::kTitleFont, vesper::fonts::ui::kUiFont};

@@ -23,8 +23,8 @@ using visor::base::SizeI;
 using visor::canvas::ColorRole;
 
 Icon::Icon(RectI bounds, const visor::draw::MonoBitmap& art, std::string_view caption,
-           const visor::draw::MonoFont& font) noexcept
-    : Widget{bounds}, art_{&art}, font_{font}, caption_{caption} {}
+           const visor::draw::MonoFont& font, visor::canvas::ColorRole art_ink) noexcept
+    : Widget{bounds}, art_{&art}, art_ink_{art_ink}, font_{font}, caption_{caption} {}
 
 void Icon::set_on_activate(ActivateHandler handler, void* context) noexcept {
     on_activate_ = handler;
@@ -88,7 +88,7 @@ void Icon::on_draw(const visor::ui::Painter& painter) const noexcept {
     }
 
     const int art_x = bounds().pos.x + ((bounds().size.w - art_w) / 2);
-    painter.draw_bitmap(PointI{art_x, block_top}, *art_, ColorRole::Foreground, 1);
+    painter.draw_bitmap(PointI{art_x, block_top}, *art_, art_ink_, 1);
 
     const visor::base::SizeI caption_size = visor::draw::measure_text(font_, caption_, 1);
     const int caption_x = bounds().pos.x + ((bounds().size.w - caption_size.w) / 2);

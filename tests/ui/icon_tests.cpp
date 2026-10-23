@@ -1,11 +1,14 @@
 #include "cases.hpp"
 #include "testing.hpp"
 
+#include "fake_color_host.hpp"
 #include "fonts/demo_font.hpp"
 #include "host/evdev_input.hpp"
 #include "host/fake_session_host.hpp"
 #include "ui/desktop/desktop.hpp"
 #include "ui/icon/icon.hpp"
+#include "ui/style/style.hpp"
+#include "ui/style/theme.hpp"
 #include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
@@ -14,6 +17,8 @@
 #include "visor/bindings/events.hpp"
 #include "visor/bindings/events/pointer_words.hpp"
 #include "visor/canvas/canvas.hpp"
+#include "visor/canvas/color.hpp"
+#include "visor/canvas/pixel_traits.hpp"
 #include "visor/draw/mono_bitmap.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
@@ -25,11 +30,14 @@
 #include <cstdint>
 #include <initializer_list>
 
+namespace style = vesper::desktop::style;
+
 namespace {
 
 using vesper::desktop::Desktop;
 using vesper::desktop::Icon;
 using vesper::desktop::WindowFrame;
+using vesper::host::FakeColorHost;
 using vesper::host::FakeSessionHost;
 using visor::base::PointI;
 using visor::base::RectI;
@@ -309,5 +317,31 @@ void run_icon_tests() {
         s.icon.set_selected(false);
         static_cast<void>(s.pump());
         VESPER_CHECK((!s.host.get(PointI{kIconBounds.pos.x, kIconBounds.pos.y})));
+    }
+    // The art's ink is the icon's own word: an icon built on Accent paints
+    // its lit art pixels in the scheme's gold, while an unlit pixel inside
+    // the art block keeps the canvas untouched -- ink transfer, not area
+    // overwrite. The point pair comes from the art's top row (all lit) and
+    // its hollow middle (row one's inner run stays dark).
+    {
+        FakeColorHost host{480, 320};
+        using ColorFrame =
+            visor::canvas::Canvas<SizeI{.w = 480, .h = 320}, visor::canvas::Xrgb8888Traits>;
+        ColorFrame frame;
+        visor::ui::InputRouter input;
+        Icon icon{kIconBounds, kArt, "DEMO", vesper::fonts::kDemoFont,
+                  visor::canvas::ColorRole::Accent};
+        icon.set_theme(&style::kColorDeskTheme);
+        static_cast<void>(visor::ui::run_once(host.table(), icon, input, frame));
+        // The block: art 8x8 plus caption gap plus one font line, centered
+        // in the slot; the art's top row is the block's first row.
+        const int block_top =
+            kIconBounds.pos.y +
+            ((kIconBounds.size.h -
+              (8 + style::kCaptionGap + static_cast<int>(vesper::fonts::kDemoFont.line_height))) /
+             2);
+        const int art_x = kIconBounds.pos.x + ((kIconBounds.size.w - 8) / 2);
+        VESPER_CHECK_EQ(host.get(PointI{art_x, block_top}), style::kColorDeskTheme.accent.argb);
+        VESPER_CHECK_EQ(host.get(PointI{art_x + 4, block_top + 1}), 0U); // hollow stays canvas
     }
 }

@@ -1,9 +1,11 @@
 #include "cases.hpp"
 #include "testing.hpp"
 
+#include "fake_color_host.hpp"
 #include "fonts/demo_font.hpp"
 #include "host/fake_session_host.hpp"
 #include "ui/desktop/desktop.hpp"
+#include "ui/style/theme.hpp"
 #include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
@@ -12,6 +14,8 @@
 #include "visor/bindings/events.hpp"
 #include "visor/bindings/events/pointer_words.hpp"
 #include "visor/canvas/canvas.hpp"
+#include "visor/canvas/color.hpp"
+#include "visor/canvas/pixel_traits.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
 #include "visor/ui/run_loop.hpp"
@@ -20,10 +24,13 @@
 
 #include <initializer_list>
 
+namespace style = vesper::desktop::style;
+
 namespace {
 
 using vesper::desktop::Desktop;
 using vesper::desktop::WindowFrame;
+using vesper::host::FakeColorHost;
 using vesper::host::FakeSessionHost;
 using visor::base::PointI;
 using visor::base::RectI;
@@ -239,5 +246,29 @@ void run_window_frame_tests() {
         });
         VESPER_CHECK_EQ(s.pump(), 3);
         VESPER_CHECK((s.win.bounds().pos == PointI{kScreen.w - 160, kScreen.h - 120}));
+    }
+    // The color face: an active title band paints the scheme's real accent
+    // and an inactive one returns to the paper. The words come off the color
+    // twin, so the seven-slot table's first public appearance is locked to
+    // pixels, and the reading point sits mid-band clear of the title's
+    // glyphs and the close box.
+    {
+        FakeColorHost host{480, 320};
+        using ColorFrame =
+            visor::canvas::Canvas<SizeI{.w = 480, .h = 320}, visor::canvas::Xrgb8888Traits>;
+        ColorFrame frame;
+        visor::ui::InputRouter input;
+        WindowFrame win{RectI{.pos = PointI{40, 50}, .size = SizeI{.w = 160, .h = 120}}, "DEMO",
+                        vesper::fonts::kDemoFont, kScreenBounds};
+        visor::ui::Label content{PointI{0, 0}, "HELLO", vesper::fonts::kDemoFont};
+        VESPER_CHECK(win.initialize());
+        VESPER_CHECK(win.set_content(&content));
+        win.set_theme(&style::kColorDeskTheme);
+        win.set_active(true);
+        static_cast<void>(visor::ui::run_once(host.table(), win, input, frame));
+        VESPER_CHECK_EQ(host.get(PointI{120, 58}), style::kColorDeskTheme.accent.argb);
+        win.set_active(false);
+        static_cast<void>(visor::ui::run_once(host.table(), win, input, frame));
+        VESPER_CHECK_EQ(host.get(PointI{120, 58}), style::kColorDeskTheme.background.argb);
     }
 }

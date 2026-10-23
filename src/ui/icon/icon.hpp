@@ -4,6 +4,7 @@
 
 #include "visor/base/geometry/rect.hpp"
 #include "visor/bindings/events.hpp"
+#include "visor/canvas/color.hpp"
 #include "visor/draw/mono_bitmap.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/widgets/widget.hpp"
@@ -43,9 +44,13 @@ class Icon final : public visor::ui::Widget {
 
     /// bounds is the whole hit target. The art block and the caption line
     /// ride centered inside it, as one block: art on top, caption directly
-    /// underneath.
+    /// underneath. art_ink is the role the art paints in -- the caption
+    /// always takes the body ink, so the icon's art can carry its own color
+    /// while its name stays with the desk's text. The default keeps every
+    /// existing icon on the body ink.
     Icon(visor::base::RectI bounds, const visor::draw::MonoBitmap& art, std::string_view caption,
-         const visor::draw::MonoFont& font) noexcept;
+         const visor::draw::MonoFont& font,
+         visor::canvas::ColorRole art_ink = visor::canvas::ColorRole::Foreground) noexcept;
 
     /// Wires the open reaction. An icon with no handler still paints its
     /// ink; a double click simply fires into the quiet, the stance an
@@ -70,6 +75,7 @@ class Icon final : public visor::ui::Widget {
 
   private:
     const visor::draw::MonoBitmap* art_;
+    visor::canvas::ColorRole art_ink_ = visor::canvas::ColorRole::Foreground;
     visor::draw::MonoFont font_;
     std::string_view caption_;
     ActivateHandler on_activate_ = nullptr;
