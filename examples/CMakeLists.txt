@@ -16,6 +16,12 @@ else()
     message(STATUS "wayland pieces not found: the wayland eyeball example is skipped")
 endif()
 
+# The D6a minimal child: the bouncing square speaking the private channel,
+# a standalone binary with no desk and no canvas -- run by hand, spawned by
+# the desk's example lane.
+add_executable(d6_block_child d6_block_child.cpp)
+target_link_libraries(d6_block_child PRIVATE vesper.session)
+
 # The VM lane: the bare-framebuffer desk the initramfs runs under QEMU. It
 # needs no display server, only Linux fbdev/evdev headers, so it builds on
 # every Linux host even where no /dev/fb0 exists to run it against.

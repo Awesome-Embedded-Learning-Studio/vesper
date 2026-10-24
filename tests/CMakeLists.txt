@@ -7,6 +7,7 @@ add_executable(vesper.tests main.cpp base/pbm_tests.cpp
                             ui/icon_tests.cpp ui/terminal_tests.cpp ui/pty_tests.cpp
                             host/keymap_tests.cpp host/evdev_input_tests.cpp
                             host/fake_host_tests.cpp host/fbdev_device_tests.cpp
+                            session/wire_tests.cpp session/remote_canvas_tests.cpp
                             assets/font_tests.cpp)
 # The harness headers (cases.hpp, testing.hpp) stay at the tests root, so the
 # subfolder cases reach them through this include path.

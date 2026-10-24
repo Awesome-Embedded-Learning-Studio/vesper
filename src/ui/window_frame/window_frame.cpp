@@ -68,7 +68,12 @@ WindowFrame::WindowFrame(RectI bounds, std::string_view title, const visor::draw
 
 void WindowFrame::on_close_activated([[maybe_unused]] visor::ui::Button& self,
                                      void* context) noexcept {
-    static_cast<WindowFrame*>(context)->close();
+    auto* const frame = static_cast<WindowFrame*>(context);
+    if (frame->on_close_ != nullptr) {
+        frame->on_close_(*frame, frame->close_context_);
+        return; // the desk answered; whatever it does is the close
+    }
+    frame->close();
 }
 
 bool WindowFrame::initialize() noexcept {
@@ -132,6 +137,11 @@ void WindowFrame::set_position(PointI pos) noexcept {
     // their reports landing inside the frame's two boxes.
     set_bounds(RectI{.pos = pos, .size = bounds().size});
     layout_children();
+}
+
+void WindowFrame::set_on_close(CloseHandler handler, void* context) noexcept {
+    on_close_ = handler;
+    close_context_ = context;
 }
 
 void WindowFrame::close() noexcept {

@@ -11,9 +11,11 @@
 #include "host/keymap.hpp"
 #include "host/pty.hpp"
 #include "icons/desktop_icons.hpp"
+#include "session/child_spawn.hpp"
 #include "ui/desktop/desktop.hpp"
 #include "ui/icon/icon.hpp"
 #include "ui/pty_source/pty_source.hpp"
+#include "ui/remote_canvas/remote_canvas.hpp"
 #include "ui/style/style.hpp"
 #include "ui/style/theme.hpp"
 #include "ui/terminal/terminal.hpp"
@@ -40,8 +42,13 @@
 #include "visor/ui/widgets/label/label.hpp"
 #include "visor/ui/widgets/widget.hpp"
 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <print>
 #include <utility>
 #include <vector>
@@ -51,6 +58,7 @@ namespace {
 using vesper::desktop::Desktop;
 using vesper::desktop::Icon;
 using vesper::desktop::PtySource;
+using vesper::desktop::RemoteCanvas;
 using vesper::desktop::Terminal;
 using vesper::desktop::WindowFrame;
 using visor::base::PointI;
@@ -114,15 +122,25 @@ class WelcomePanel final : public visor::ui::Widget {
 struct Opener {
     WindowFrame* win;
     WindowFrame* other = nullptr;
+    /// The desk's current block window, when this opener must quiet it
+    /// too: the block frame is born on the heap, so the opener holds the
+    /// slot (a pointer into the block session) rather than the frame, and
+    /// a retired-but-resident block still reads as quietable.
+    WindowFrame* const* block_slot = nullptr;
     visor::ui::Widget* take_focus = nullptr;
 };
 
 /// The desk's focus ring: exactly one frame wears the accent band. The
-/// Opener already knows which pair of frames the ring shares.
+/// Opener names its peers -- the pair built at startup plus whichever
+/// block window the session currently shows.
 void focus_frame(WindowFrame& self, const Opener& opener) noexcept {
     self.set_active(true);
     if (opener.other != nullptr) {
         opener.other->set_active(false);
+    }
+    if (opener.block_slot != nullptr && *opener.block_slot != nullptr &&
+        *opener.block_slot != &self) {
+        (*opener.block_slot)->set_active(false);
     }
 }
 
@@ -206,6 +224,131 @@ class FoldedKeys {
 
     visor::host::HostTable wrapped_;
 };
+
+/// The D6a lane: one spawned child program in one desk window. The frame
+/// size is the construction-time agreement with d6_block_child (200x120),
+/// spelled in the same words on both sides; the child binary is searched
+/// beside this program's own image, so the example lane finds it in the
+/// build tree without a path baked in. One window at a time: opening the
+/// block again while it runs is a no-op, the desk's first honest answer to
+/// "what does a second copy mean". Retired frames stay on the tree hidden,
+/// the desk's own convention for closed windows; D6b's window list will
+/// own them properly.
+struct BlockSession {
+    WindowFrame* win = nullptr;
+    RemoteCanvas* canvas = nullptr;
+    pid_t pid = -1;
+    Desktop* desk = nullptr;
+    std::array<WindowFrame*, 2> peers{nullptr, nullptr}; // the other bands
+};
+
+/// Hides the frame and reaps the child: the desk's whole reaction to the
+/// channel's end. Runs from inside pump(), which means no repaint debt is
+/// owed here -- close() reports its own. The canvas closed its socket the
+/// moment the channel died, so this only tends the process and the frame.
+void reap_block(BlockSession& session) noexcept;
+
+void retire_block(BlockSession& session) noexcept {
+    if (session.win != nullptr) {
+        session.win->close();
+    }
+    session.canvas = nullptr;
+    reap_block(session);
+}
+
+/// Collects the child without ever waiting: the channel's end already
+/// handed it an EOF, so it leaves on its own and the loop sweeps the
+/// remainders between frames. Blocking here is the deadlock this lane
+/// once shipped -- a full pipe and a waiting desk staring at each other.
+void reap_block(BlockSession& session) noexcept {
+    // NOLINTNEXTLINE(misc-include-cleaner): WNOHANG is sys/wait.h's own macro.
+    if (session.pid > 0 && ::waitpid(session.pid, nullptr, WNOHANG) == session.pid) {
+        session.pid = -1;
+    }
+}
+
+// NOLINTNEXTLINE(misc-const-correctness): the handler type carries void*.
+void on_block_exit(RemoteCanvas& self, void* context) noexcept {
+    static_cast<void>(self);
+    retire_block(*static_cast<BlockSession*>(context));
+}
+
+// The close box's answer: hand the child its goodbye word and let the
+// channel's own end do the closing -- the EOF wakes the child, the child
+// leaves, on_exit retires the frame. Nothing blocks and nothing orphans.
+// NOLINTNEXTLINE(misc-const-correctness): the handler type carries void*.
+void on_block_close(WindowFrame& self, void* context) noexcept {
+    static_cast<void>(self);
+    const BlockSession& session = *static_cast<BlockSession*>(context);
+    if (session.canvas != nullptr) {
+        session.canvas->send_close(); // const calls the const verb, mutates the child
+    }
+}
+
+// NOLINTNEXTLINE(misc-const-correctness): the handler type carries void*.
+void open_block(Icon& self, void* context) noexcept {
+    static_cast<void>(self);
+    BlockSession& session = *static_cast<BlockSession*>(context);
+    if (session.canvas != nullptr) {
+        return; // one window at a time
+    }
+    // The child rides beside this program's own image: whatever path the
+    // lane was started from, the sibling binary is the same directory.
+    static std::array<char, 512> exe_dir{};
+    if (exe_dir.front() == 0) {
+        const auto link_len = static_cast<std::size_t>(
+            ::readlink("/proc/self/exe", exe_dir.data(), exe_dir.size() - 1));
+        if (link_len == 0) {
+            return;
+        }
+        exe_dir[link_len] = 0;
+        char* const slash = std::strrchr(exe_dir.data(), '/');
+        if (slash != nullptr) {
+            slash[1] = 0; // keep the directory, drop the program's own name
+        }
+    }
+    std::array<char, 640> path{};
+    const std::size_t dir_len = std::strlen(exe_dir.data());
+    std::memcpy(path.data(), exe_dir.data(), dir_len);
+    std::memcpy(path.data() + dir_len, "d6_block_child", sizeof("d6_block_child"));
+    std::array<char*, 2> argv{path.data(), nullptr};
+    auto child = vesper::session::spawn_child(path.data(), argv.data());
+    if (!child.has_value()) {
+        std::println(stderr, "vesper: cannot spawn the block child at {}", path.data());
+        return;
+    }
+    session.pid = child->pid;
+    // The frame and its face are born on the heap and live as long as the
+    // tree does -- the same lifetime a stack frame would give them, minus
+    // the need to exist before the socket does.
+    auto* const win = new WindowFrame{
+        RectI{.pos = PointI{150, 90}, .size = SizeI{.w = 210, .h = 145}},
+        "Block",
+        vesper::fonts::title::kTitleFont,
+        kWorkArea,
+    };
+    auto* const canvas = new RemoteCanvas{win->content_area(), child->socket};
+    canvas->set_on_exit(&on_block_exit, &session);
+    static_cast<void>(win->initialize());
+    static_cast<void>(win->set_content(canvas));
+    static_cast<void>(session.desk->add_child(win));
+    win->close();           // a newborn window starts hidden like the rest
+    win->set_visible(true); // and showing it owes the pixels it claims
+    static_cast<void>(win->raise());
+    // The band ring: the block takes the accent and the focus, and the
+    // frames it shares the desk with give both up -- the same exchange
+    // every opener on this desk performs, this one just names two peers.
+    win->set_active(true);
+    for (WindowFrame* peer : session.peers) {
+        if (peer != nullptr) {
+            peer->set_active(false);
+        }
+    }
+    canvas->set_focused(true);
+    win->set_on_close(&on_block_close, &session);
+    session.win = win;
+    session.canvas = canvas;
+}
 
 } // namespace
 
@@ -294,6 +437,23 @@ int main(int argc, char** argv) {
     }();
     Icon welcome_icon{welcome_slot, welcome_layers, "WELCOME", vesper::fonts::ui::kUiFont};
     Icon term_icon{term_slot, term_layers, "TERMINAL", vesper::fonts::ui::kUiFont};
+    const RectI block_slot{
+        .pos = PointI{16, 152},
+        .size = SizeI{.w = style::kIconSlotWidth, .h = style::kIconSlotHeight},
+    };
+    constexpr std::array<Icon::Layer, 2> block_layers = [] {
+        std::array<Icon::Layer, 2> layers{};
+        layers[0] = {
+            .art = &vesper::examples::kTermBodyArt,
+            .ink = visor::canvas::ColorRole::Muted,
+        };
+        layers[1] = {
+            .art = &vesper::examples::kWindowContentArt,
+            .ink = visor::canvas::ColorRole::Accent,
+        };
+        return layers;
+    }();
+    Icon block_icon{block_slot, block_layers, "BLOCK", vesper::fonts::ui::kUiFont};
 
     WelcomePanel welcome{RectI{.pos = PointI{0, 0}, .size = SizeI{.w = 210, .h = 87}},
                          vesper::fonts::title::kTitleFont, vesper::fonts::ui::kUiFont};
@@ -325,13 +485,21 @@ int main(int argc, char** argv) {
     term.set_source(&term_source);
     Opener term_opener{.win = &term_win, .take_focus = &term};
 
-    // Each opener turns the other frame's band off when it shows its own.
+    // Each opener turns the other frames' bands off when it shows its own;
+    // the block names its peers on open, and its peers name it back.
     welcome_opener.other = &term_win;
     term_opener.other = &welcome_win;
     term_win.set_on_focus(&on_frame_focus, &term_opener);
     welcome_win.set_on_focus(&on_frame_focus, &welcome_opener);
 
     Selection selection;
+    BlockSession block{.desk = &desktop};
+    block.peers[0] = &welcome_win;
+    block.peers[1] = &term_win;
+    welcome_opener.block_slot = &block.win;
+    term_opener.block_slot = &block.win;
+    block_icon.set_on_activate(&open_block, &block);
+    block_icon.set_on_select(&select_icon, &selection);
     welcome_icon.set_on_activate(&open_window, &welcome_opener);
     term_icon.set_on_activate(&open_window, &term_opener);
     welcome_icon.set_on_select(&select_icon, &selection);
@@ -340,9 +508,10 @@ int main(int argc, char** argv) {
     // Icons first, windows after: later children paint on top, so an open
     // window never hides behind an icon it covers.
     if (!desktop.add_child(&tag) || !desktop.add_child(&welcome_icon) ||
-        !desktop.add_child(&term_icon) || !welcome_win.initialize() ||
-        !welcome_win.set_content(&welcome) || !desktop.add_child(&welcome_win) ||
-        !term_win.initialize() || !term_win.set_content(&term) || !desktop.add_child(&term_win)) {
+        !desktop.add_child(&term_icon) || !desktop.add_child(&block_icon) ||
+        !welcome_win.initialize() || !welcome_win.set_content(&welcome) ||
+        !desktop.add_child(&welcome_win) || !term_win.initialize() ||
+        !term_win.set_content(&term) || !desktop.add_child(&term_win)) {
         std::println(stderr, "vesper: the desktop's child table is full");
         return 1;
     }
@@ -367,6 +536,10 @@ int main(int argc, char** argv) {
         // The pty master is the loop's other sleeper: output from bash wakes
         // the desk between host ticks, a quiet desk sleeps the tick out.
         static_cast<void>(term_source.pump(15));
+        if (block.canvas != nullptr) {
+            block.canvas->pump();
+        }
+        reap_block(block);
     }
     return 0;
 }

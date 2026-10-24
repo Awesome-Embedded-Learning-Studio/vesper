@@ -9,6 +9,8 @@ int main() {
     run_pbm_tests();
     run_terminal_tests();
     run_pty_tests();
+    run_wire_tests();
+    run_remote_canvas_tests();
     run_font_tests();
     run_keymap_tests();
     run_evdev_input_tests();

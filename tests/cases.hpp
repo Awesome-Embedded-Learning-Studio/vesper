@@ -9,6 +9,8 @@ void run_icon_tests();
 void run_pbm_tests();
 void run_terminal_tests();
 void run_pty_tests();
+void run_wire_tests();
+void run_remote_canvas_tests();
 void run_font_tests();
 void run_keymap_tests();
 void run_evdev_input_tests();

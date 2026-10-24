@@ -85,6 +85,14 @@ class WindowFrame final : public visor::ui::Widget {
     /// Takes the window off the screen. The visibility flip reports the
     /// frame's box on its own, so the ground shows through where the window
     /// stood; state and content stay as they are for a later re-showing.
+    /// What the close box asks when pressed. The default answer is the
+    /// plain hide of close(); a desk with a child behind the window wires
+    /// set_on_close and answers with its own goodbye -- the desk closes
+    /// the channel, the channel's end closes the frame.
+    using CloseHandler = void (*)(WindowFrame& self, void* context);
+
+    void set_on_close(CloseHandler handler, void* context = nullptr) noexcept;
+
     void close() noexcept;
 
     /// Wires the press cue; the handler runs before the band's drag starts.
@@ -123,6 +131,8 @@ class WindowFrame final : public visor::ui::Widget {
     visor::base::PointI drag_offset_;
     FocusHandler on_focus_ = nullptr;
     void* focus_context_ = nullptr;
+    CloseHandler on_close_ = nullptr;
+    void* close_context_ = nullptr;
     bool dragging_ = false;
     bool active_ = true;
 };

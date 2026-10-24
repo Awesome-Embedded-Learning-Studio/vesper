@@ -202,6 +202,41 @@ void run_window_frame_tests() {
         VESPER_CHECK(!s.win.visible());
     }
 
+    // The close box asks first: a desk that wired a close handler gets
+    // the question and keeps the frame -- its goodbye chain closes the
+    // window when the channel under it ends -- while an unwired frame
+    // keeps the old plain hide.
+    {
+        Scene s;
+        VESPER_CHECK(s.build());
+        int answered = 0;
+        s.win.set_on_close(
+            +[](WindowFrame& self, void* context) noexcept {
+                static_cast<void>(self);
+                ++*static_cast<int*>(context);
+            },
+            &answered);
+        const RectI close_rect = s.win.close_box();
+        const PointI center{close_rect.pos.x + (close_rect.size.w / 2),
+                            close_rect.pos.y + (close_rect.size.h / 2)};
+        s.feed({
+            visor::host::PointerDown{.button = 0, .pos = center},
+            visor::host::PointerUp{.button = 0, .pos = center},
+        });
+        VESPER_CHECK_EQ(s.pump(), 2);
+        VESPER_CHECK_EQ(answered, 1);
+        VESPER_CHECK(s.win.visible()); // the handler answered; the frame waits
+
+        s.win.set_on_close(nullptr);
+        s.feed({
+            visor::host::PointerDown{.button = 0, .pos = center},
+            visor::host::PointerUp{.button = 0, .pos = center},
+        });
+        VESPER_CHECK_EQ(s.pump(), 2);
+        VESPER_CHECK_EQ(answered, 1);
+        VESPER_CHECK(!s.win.visible()); // unwired, the box hides as ever
+    }
+
     // The button's own click synthesis: a release that lands outside the
     // close box cancels, and dragging from the close box is not a drag.
     {

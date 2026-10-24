@@ -34,6 +34,14 @@ if(VESPER_TSAN)
     add_link_options(-fsanitize=thread)
 endif()
 
+# The session layer: the private channel to windowed children, wire words
+# plus the spawn. It sits under ui and beside host, linking only the core
+# so both the desk and the standalone children can speak it.
+add_library(vesper.session STATIC src/session/wire.cpp
+                                    src/session/child_spawn.cpp)
+target_include_directories(vesper.session PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(vesper.session PUBLIC visor.core)
+
 # The three layers: base decodes assets, ui carries the desktop modules, host
 # wires the machine.
 add_library(
@@ -48,11 +56,12 @@ add_library(
     src/host/fake_session_host.cpp
     src/host/fbdev_device.cpp
     src/host/keymap.cpp
-    src/host/pty.cpp)
+    src/host/pty.cpp
+    src/ui/remote_canvas/remote_canvas.cpp)
 # The asset headers live outside src as art, so assets/ joins the include
 # path: fonts arrive as "fonts/...", icons as "icons/...".
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/assets)
-target_link_libraries(vesper.ui PUBLIC visor.ui visor.host)
+target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session)
 
 enable_testing()
 add_subdirectory(tests)
