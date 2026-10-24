@@ -1,5 +1,7 @@
 #pragma once
 
+#include "visor/bindings/host.hpp"
+
 #include <optional>
 #include <sys/types.h>
 
@@ -14,15 +16,18 @@ struct ChildChannel {
 };
 
 /**
- * @brief Runs one program with the channel as its stdio.
+ * @brief Runs one program with the channel as its stdio, birthed through
+ *        the desk table's fourth slot.
  *
- * posix_spawn starts the child with the desk's socket half dup2'd onto
- * fds 0 and 1: the child's stdin and stdout are the private channel, the
- * Unix way a program becomes a pane (no new device, no new convention --
- * the same shape the pty lane gives bash). The child inherits no other
- * wiring; argv follows the exec convention, argv[0] naming the program.
- * Nullopt covers every failure with the cleanup already done.
+ * The desk's socket half lands on fds 0 and 1 (the redirect gift shape):
+ * the child's stdin and stdout are the private channel, the Unix way a
+ * program becomes a pane (no new device, no new convention -- the same
+ * shape the pty lane gives bash). The child inherits the environment whole
+ * and no other wiring; argv follows the exec convention, argv[0] naming
+ * the program. A table without the fourth slot wired cannot birth and
+ * says so. Nullopt covers every failure with the cleanup already done.
  */
-[[nodiscard]] std::optional<ChildChannel> spawn_child(const char* path, char* const* argv) noexcept;
+[[nodiscard]] std::optional<ChildChannel> spawn_child(const visor::host::HostTable& birth,
+                                                      const char* path, char* const* argv) noexcept;
 
 } // namespace vesper::session

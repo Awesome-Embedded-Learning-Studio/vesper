@@ -13,6 +13,10 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 # The visor borrow: VISOR_ROOT lookup, the borrowed targets and the X11 tier.
 include(cmake/visor.cmake)
 
+# The compositor lane (the roadmap's C series): vesper as a Wayland server.
+# It comes after the visor borrow because the judgment lane links both.
+include(cmake/compositor.cmake)
+
 option(VESPER_SANITIZE "ASan+UBSan switch" OFF)
 option(VESPER_TSAN "TSan switch" OFF)
 
@@ -50,7 +54,9 @@ add_library(
     src/ui/desktop/desktop.cpp
     src/ui/icon/icon.cpp
     src/ui/pty_source/pty_source.cpp
+    src/ui/shell_desk/shell_desk.cpp
     src/ui/terminal/terminal.cpp
+    src/ui/wayland_canvas/wayland_canvas.cpp
     src/ui/window_frame/window_frame.cpp
     src/host/evdev_input.cpp
     src/host/fake_session_host.cpp
@@ -61,7 +67,8 @@ add_library(
 # The asset headers live outside src as art, so assets/ joins the include
 # path: fonts arrive as "fonts/...", icons as "icons/...".
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/assets)
-target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session)
+target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session
+                                vesper.compositor)
 
 enable_testing()
 add_subdirectory(tests)

@@ -34,6 +34,12 @@ add_library(visor.host STATIC
     ${VISOR_ROOT}/src/bindings/cinux/frame_expand.cpp)
 target_link_libraries(visor.host PUBLIC visor.core)
 
+# The fourth slot's POSIX filling from the same tree: the desks that birth
+# real programs (the X bridge, the private-channel children) wire it into
+# their tables themselves, so it stays a library rather than an opinion.
+add_library(visor.host.posix STATIC ${VISOR_ROOT}/src/bindings/posix/spawn.cpp)
+target_link_libraries(visor.host.posix PUBLIC visor.core)
+
 # The eyeball lane: an X11 window running the same scene the judgments render.
 # It exists to be looked at, so it is skipped without X11 and carries no test.
 # Only the borrowed library lives here; the example that links it is wired up

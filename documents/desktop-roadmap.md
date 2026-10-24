@@ -25,12 +25,12 @@
 
 形态：嵌套式起步。vesper 同时是 Wayland 服务端（招待应用）与客户端（合成结果经现有宿主表输出），宿主表一根线不动，fbdev 通道照跑，将来直连显卡（DRM）随时换输出端。libwayland-server 与 client 同族，系统库待遇（本机 1.26.0 已验），third_party 不增员。
 
-- **C1 合成器心脏**：内嵌 libwayland-server，开 wl_compositor、wl_shm、wl_seat（空壳）、xdg_wm_base 四全局；自家最小 shm 客户端当陪练（连上、交 surface、上桌成窗）。做成判据：陪练像素逐字出现在桌面画布，wayland-info 列得出全局对象，判例 headless 全绿。
-- **C2 输入**：座位充实为键盘加指针，桌面事件翻译成协议词发给持焦点的客户端，键码 Linux 原生直通。判据：陪练收到的键盘与指针事件和桌面判例喂进的一致。座位协议版本取舍（手势、高分辨率滚轮）本期拍，保守起步。
-- **C3 窗管理**：客户端报的窗接进 WindowFrame，拖动、层级、关闭、互斥焦点走桌面语义，含指针抓取。判据：两三个客户端同屏，拖动排序关闭全对。
-- **C4 帧的礼貌**：帧回调按显示节拍发，缓冲合成后释放，damage 只报变化。判据：陪练连续提交上千帧无死锁，帧率跟随桌面节拍。
-- **C5 XWayland**：启动并接待 XWayland，X11 应用经它上桌。判据：一个真实 X11 图形程序在桌面成一扇活的窗。本期体量最重（XWayland 是完整的 X server 进程），风险最高，排最后不并行。
-- **C6 第四口提炼**：spawn 形状（路径、参数、环境带 WAYLAND_DISPLAY）提炼为 visor 宿主表第四口提案，与 stage-4 联动，Cinux 侧将来同口。判据：提案进上游，两边拍板。
+- **C1 合成器心脏**（2026-10-24 已收官）：内嵌 libwayland-server，开 wl_compositor、wl_shm、wl_seat（空壳）、xdg_wm_base 四全局；自家最小 shm 客户端当陪练（连上、交 surface、上桌成窗）。做成判据：陪练像素逐字出现在桌面画布，wayland-info 列得出全局对象，判例 headless 全绿。三判据全过：判例在 tests/compositor，像素链判据走 FakeColorHost，wayland-info 手验于 examples/compositor_desktop 探针。
+- **C2 输入**（2026-10-24 已收官）：座位充实为键盘加指针，桌面事件翻译成协议词发给持焦点的客户端，键码 Linux 原生直通。判据：陪练收到的键盘与指针事件和桌面判例喂进的一致。座位协议版本取舍：绑定 v5、滚轮走 axis_value120（保守起步已拍）。
+- **C3 窗管理**（2026-10-24 已收官）：客户端报的窗接进 WindowFrame，拖动、层级、关闭、互斥焦点走桌面语义，含指针抓取。判据：双客户端同屏判例全过（拖动、层叠、关闭、抓取、焦点移交，tests/compositor/shell_desk_tests）。
+- **C4 帧的礼貌**（2026-10-24 已收官）：帧回调按显示节拍发（Server::end_frame 一拍结账），缓冲合成后释放，damage 只报变化。判据：千帧单缓冲客户端零死锁、计数逐帧对齐、角块 damage 单条带（tests/compositor/cadence_tests）。
+- **C5 XWayland**（2026-10-24）：rootless XWM 路线（不做 X 侧 reparent，不依赖 Xwayland 创建 xdg toplevel），xcb 与 xcb-composite 负责 Composite 重定向、WM_S0、WL_SURFACE_ID、WM_DELETE_WINDOW；桌面侧 shell role 复用窗口层。启动时持续 dispatch/flush Wayland，等待 displayfd 就绪，abstract listener 兼容 WSLg 只读 `/tmp/.X11-unix`。判据：真实 X11 程序（examples/xhello，Xlib 写）在桌面显示琥珀像素、接收关闭消息并以 0 退出；缺 Xwayland 二进制时响亮跳过。
+- **C6 第四口提炼**（2026-10-24 底稿落档）：spawn 形状（路径、参数、环境带 WAYLAND_DISPLAY、递 fd）提炼为 visor 宿主表第四口提案，与 stage-4 联动，Cinux 侧将来同口。判据：提案进上游，两边拍板。底稿在 documents/visor/spawn-fourth-slot-proposal.md，待作者过目。
 
 资产复用：D6a 的通道与事件平铺、RemoteCanvas 形状（surface 进画布）、draw_image 原语在 C1 与 C3 直接上岗。
 

@@ -1,6 +1,7 @@
 #include "ui/terminal/terminal.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +19,23 @@
 #include "visor/ui/widgets/widget.hpp"
 
 namespace vesper::desktop {
+namespace {
+
+// The xterm sixteen, verbatim values: the classic SGR palette every
+// colored program on this machine already speaks. Index 0..7 the dim
+// half, 8..15 the bright half.
+constexpr std::array<visor::canvas::Ink, 16> kSgrPalette{
+    visor::canvas::Ink::from_rgb(0x000000), visor::canvas::Ink::from_rgb(0xcd0000),
+    visor::canvas::Ink::from_rgb(0x00cd00), visor::canvas::Ink::from_rgb(0xcdcd00),
+    visor::canvas::Ink::from_rgb(0x0000ee), visor::canvas::Ink::from_rgb(0xcd00cd),
+    visor::canvas::Ink::from_rgb(0x00cdcd), visor::canvas::Ink::from_rgb(0xe5e5e5),
+    visor::canvas::Ink::from_rgb(0x7f7f7f), visor::canvas::Ink::from_rgb(0xff0000),
+    visor::canvas::Ink::from_rgb(0x00ff00), visor::canvas::Ink::from_rgb(0xffff00),
+    visor::canvas::Ink::from_rgb(0x5c5cff), visor::canvas::Ink::from_rgb(0xff00ff),
+    visor::canvas::Ink::from_rgb(0x00ffff), visor::canvas::Ink::from_rgb(0xffffff),
+};
+
+} // namespace
 
 using visor::base::PointI;
 using visor::base::RectI;
@@ -65,6 +83,7 @@ Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font) noexcept
     cols_ = std::max(bounds.size.w / cell_w_, 1);
     rows_ = std::max(bounds.size.h / cell_h_, 1);
     cells_.assign(cell_index(cols_ - 1, rows_ - 1) + 1, ' ');
+    attrs_.assign(cells_.size(), CellAttr{});
 }
 
 void Terminal::set_source(TerminalSource* source) noexcept {
@@ -90,7 +109,7 @@ void Terminal::receive(std::string_view bytes) noexcept {
             // need, swallowed whole.
             if (byte == '[') {
                 esc_ = EscState::Bracket;
-                csi_params_ = {0, 0};
+                csi_params_.fill(0);
                 csi_param_count_ = 0;
                 csi_private_ = false;
             } else {
@@ -103,7 +122,7 @@ void Terminal::receive(std::string_view bytes) noexcept {
                 csi_params_[static_cast<std::size_t>(csi_param_count_)] =
                     (csi_params_[static_cast<std::size_t>(csi_param_count_)] * 10) + (byte - '0');
             } else if (byte == ';') {
-                if (csi_param_count_ + 1 < 2) {
+                if (csi_param_count_ + 1 < static_cast<int>(csi_params_.size())) {
                     ++csi_param_count_;
                 }
             } else if (byte >= 0x3c && byte <= 0x3f) {
@@ -133,6 +152,7 @@ void Terminal::receive(std::string_view bytes) noexcept {
                 --cursor_col_;
             }
             cells_[cell_index(cursor_col_, cursor_row_)] = ' ';
+            attrs_[cell_index(cursor_col_, cursor_row_)] = CellAttr{};
         } else if (byte == '\n') {
             // One byte, the plain-echo pair: next row, pen at the line start.
             newline();
@@ -159,12 +179,50 @@ void Terminal::erase_cells(int col_from, int col_to, int row) noexcept {
     const int first = std::max(col_from, 0);
     const int last = std::min(col_to, cols_ - 1);
     for (int col = first; col <= last; ++col) {
+        // Erase takes the dress with the glyph: a cleared screen owes no
+        // stray palette corners, and repaint-from-scratch apps (the CSI 2J
+        // crowd) start from the screen's own default again.
         cells_[cell_index(col, row)] = ' ';
+        attrs_[cell_index(col, row)] = CellAttr{};
     }
+}
+
+void Terminal::style_for_sgr(int word) noexcept {
+    if (word == 0) {
+        // Reset: the screen's own inverted default, bold gone with the rest.
+        style_ = CellAttr{};
+        style_bold_ = false;
+    } else if (word == 1) {
+        style_bold_ = true;
+    } else if (word == 22) {
+        style_bold_ = false;
+    } else if (word >= 30 && word <= 37) {
+        // Dim foreground, brightened by the bold bit: the classic linkage
+        // a colored prompt on this desk expects.
+        style_.fg = static_cast<std::uint8_t>(1 + (word - 30) + (style_bold_ ? 8 : 0));
+    } else if (word == 39) {
+        style_.fg = 0;
+    } else if (word >= 40 && word <= 47) {
+        style_.bg = static_cast<std::uint8_t>(1 + (word - 40));
+    } else if (word == 49) {
+        style_.bg = 0;
+    } else if (word >= 90 && word <= 97) {
+        style_.fg = static_cast<std::uint8_t>(1 + 8 + (word - 90));
+    } else if (word >= 100 && word <= 107) {
+        style_.bg = static_cast<std::uint8_t>(1 + 8 + (word - 100));
+    }
+    // Every other word (underline, italic, inverse and company) is parsed
+    // and dropped: this screen has no dress for them yet.
 }
 
 void Terminal::apply_csi(unsigned char final_byte) noexcept {
     if (csi_private_) {
+        return;
+    }
+    if (final_byte == 'm') {
+        for (int i = 0; i <= csi_param_count_; ++i) {
+            style_for_sgr(csi_params_[static_cast<std::size_t>(i)]);
+        }
         return;
     }
     const int first = csi_params_[0];
@@ -273,6 +331,7 @@ void Terminal::on_key_down(std::uint32_t code, visor::host::Modifiers modifiers)
 
 void Terminal::put(unsigned char byte) noexcept {
     cells_[cell_index(cursor_col_, cursor_row_)] = static_cast<char>(byte);
+    attrs_[cell_index(cursor_col_, cursor_row_)] = style_;
     ++cursor_col_;
     if (cursor_col_ == cols_) {
         cursor_col_ = 0;
@@ -287,29 +346,46 @@ void Terminal::newline() noexcept {
         const auto line = static_cast<std::size_t>(cols_);
         std::copy(cells_.begin() + static_cast<std::ptrdiff_t>(line), cells_.end(), cells_.begin());
         std::fill(cells_.end() - static_cast<std::ptrdiff_t>(line), cells_.end(), ' ');
+        std::copy(attrs_.begin() + static_cast<std::ptrdiff_t>(line), attrs_.end(), attrs_.begin());
+        std::fill(attrs_.end() - static_cast<std::ptrdiff_t>(line), attrs_.end(), CellAttr{});
         return;
     }
     ++cursor_row_;
 }
 
 void Terminal::on_draw(const visor::ui::Painter& painter) const noexcept {
-    // An inverted screen: lit ground, glyphs and cursor as unlit holes. One
-    // ink, no second color, and the terminal still stands off the desk's
-    // light ground.
+    // An inverted screen by default: lit ground, glyphs and cursor as
+    // unlit holes -- the dress SGR 0 restores to. A cell that carries SGR
+    // words paints over that default with the palette's own inks: its
+    // ground fills the cell, its glyph rides the raw-ink text lane.
     painter.fill(bounds(), visor::canvas::ColorRole::Foreground);
     for (int row = 0; row < rows_; ++row) {
         for (int col = 0; col < cols_; ++col) {
             const std::size_t index = cell_index(col, row);
-            if (cells_[index] == ' ') {
-                continue;
-            }
+            const CellAttr attr = attrs_[index];
             // One glyph per cell, at the cell's own origin: a character the
             // font has no glyph for paints nothing, and every later cell
             // stays on its grid position regardless.
             const PointI pos{bounds().pos.x + (col * cell_w_), bounds().pos.y + (row * cell_h_)};
-            visor::ui::draw_text_clipped(painter, bounds(), pos, font_,
-                                         std::string_view{&cells_[index], 1},
-                                         visor::canvas::ColorRole::Background, 1);
+            if (attr.bg != 0) {
+                const RectI cell_rect{
+                    .pos = pos,
+                    .size = visor::base::SizeI{.w = cell_w_, .h = cell_h_},
+                };
+                painter.fill(cell_rect, kSgrPalette[attr.bg - 1]);
+            }
+            if (cells_[index] == ' ') {
+                continue;
+            }
+            if (attr.fg != 0) {
+                visor::ui::draw_text_clipped(painter, bounds(), pos, font_,
+                                             std::string_view{&cells_[index], 1},
+                                             kSgrPalette[attr.fg - 1], 1);
+            } else {
+                visor::ui::draw_text_clipped(painter, bounds(), pos, font_,
+                                             std::string_view{&cells_[index], 1},
+                                             visor::canvas::ColorRole::Background, 1);
+            }
         }
     }
     // The cursor is one solid cell block in the scheme's accent -- on the

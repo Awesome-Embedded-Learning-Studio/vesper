@@ -17,9 +17,9 @@
 
 - **不修改 visor 树内任何文件。** 缺件走上游提（提案束清单见 documents/visor/upgrade-design.md），不私养借壳源。非库目标件例外（Cinux-GUI 的 host 接线、脚本这类），抄写进对应目录，借据写在文件头。
 - 借壳源唯一：`third_party/visor` 子模块（2026-10-20 作者拍板，不留 VISOR_ROOT 一类逃生口）。钉就是 vesper 历史里的 gitlink，升级等于子模块指针前移一笔提交，两边验收都绿了才动。并排开发在子模块里 checkout 分支干活。
-- tested-against 记在本节：visor @ `4b60639`（merge image-verbs：draw_image 绘制原语三档折叠、clang-tidy 并行化、验收分档 quick/full，前含 wayland 后端、按键重复、事件族头分家、区域成批提交，主树消费方 include 已对齐族头，2026-10-23 双仓实测全绿）。
+- tested-against 记在本节：visor @ `73d76d1`（main，2026-10-24 已推：画笔四动词与两条文本走位的 Ink 裸墨通道，像素参数帮手收拢笔画，逐像素判例入列。前含 4bae5d2 的 spawn env 预算 256 词与原号 gift 摘 CLOEXEC 封条、2e6d25c 的 spawn-slot 第四口 spawn 全家，双仓实测全绿）。
 - **X11 与 Wayland 只进肉眼通道。** visor.host.x11、visor.host.wayland 只被 examples 的调试目标链接，不进主库、不进验收，验收以 fake host 为准。
-- 待补：合成器主线 C 系列（2026-10-24 拍板，roadmap 有全文）：C1 合成器心脏待启（内嵌 libwayland-server，系统库待遇），后继 C2 输入、C3 窗管理、C4 帧礼貌、C5 XWayland、C6 spawn 第四口提炼与 visor stage-4 联动。原 D6b 撤编。终端 16 色 SGR 仍候 visor 逐笔墨色原语。D5b、D6a 均收官。D2 议题已随 visor `5bc71dc` 在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
+- 待补：合成器主线 C 系列（2026-10-24 拍板，roadmap 有全文）：C1-C4 已收官，C5 XWayland 走 rootless XWM 路线（Composite 重定向与 WL_SURFACE_ID 关联，桌面侧 shell role 复用窗口层，displayfd 就绪前持续服务 Wayland；判例缺 Xwayland 二进制时响亮跳过），C6 第四口 spawn：上游 main 已并 spawn-slot 与 env 预算、CLOEXEC 补件（至 4bae5d2），vesper 侧回填收官（child_spawn 与 XWayland::launch 走第四口出生）。wayland 侧硬依赖：libwayland-server/client、xcb 与 xcb-composite（系统库待遇，缺件即 FATAL）。原 D6b 撤编。终端 16 色 SGR 收官：visor 裸墨原语已并入上游（至 73d76d1，落地偏离见底稿头部），vesper 侧 SGR 解析、xterm 十六色调色板与逐格裸墨落成，判例覆盖前景背景、加亮、复位、擦除携装与滚屏携装。D5b、D6a 均收官。D2 议题已随 visor `5bc71dc` 在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
 
 ## 架构边界
 

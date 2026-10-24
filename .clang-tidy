@@ -16,10 +16,10 @@ Checks: >
   -readability-magic-numbers
 WarningsAsErrors: '*'
 # Diagnoses reach vesper-owned headers only (src/base, src/ui, src/host,
-# assets/fonts, assets/icons, tests). Borrowed visor headers stay out of
-# scope: this repo must not modify them, so it does not lint them either --
-# visor checks its own tree.
-HeaderFilterRegex: 'base/|ui/|host/|fonts/|icons/'
+# src/compositor, assets/fonts, assets/icons, tests). Borrowed visor headers
+# stay out of scope: this repo must not modify them, so it does not lint them
+# either -- visor checks its own tree.
+HeaderFilterRegex: 'base/|ui/|host/|compositor/|fonts/|icons/'
 FormatStyle: file
 CheckOptions:
   # clangd's stdlib map carries no entry for poll.h, so include-cleaner

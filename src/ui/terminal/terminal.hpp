@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string_view>
 #include <vector>
 
@@ -44,9 +45,14 @@ class TerminalSource {
  * them in the grid. What receive() understands: printable ASCII goes into
  * the cell under the cursor, '\n' steps to the next row's start, '\r'
  * rewinds the pen to the line start, '\b' steps back one cell and blanks
- * it, '\t' jumps to the next eight-column stop. Of ANSI it obeys the trio
- * a real prompt actually emits -- CSI K (erase in line), CSI J (erase in
- * screen) and CSI H (cursor position, 1-based row;column) -- and swallows
+ * it, '\t' jumps to the next eight-column stop. Of ANSI it obeys the words
+ * a real prompt actually emits: CSI K (erase in line), CSI J (erase in
+ * screen), CSI H (cursor position, 1-based row;column), the vt100 arrow
+ * quartet, and CSI m's sixteen-color SGR (fg 30-37 and 90-97, bg 40-47
+ * and 100-107, reset 0, back-to-default 39/49, bold-as-bright 1 and 22).
+ * Each dressed cell keeps its own palette slot, erase and scroll carry
+ * the dress along, SGR 0 restores the screen's own inverted default, and
+ * the palette is the xterm sixteen. Every other sequence is swallowed
  * every other sequence whole, parsed and not obeyed, so no stray brackets
  * ever paint. Typing past the last column wraps, and a newline on the last
  * row scrolls the grid up one line.
@@ -89,13 +95,23 @@ class Terminal final : public visor::ui::Widget {
     void on_draw(const visor::ui::Painter& painter) const noexcept override;
 
   private:
+    /// One cell's SGR dress: 0 means the screen's own default (the inverted
+    /// box: themed ground, glyphs as holes), 1..16 name a palette slot.
+    struct CellAttr {
+        std::uint8_t fg = 0;
+        std::uint8_t bg = 0;
+    };
+
     /// The escape walker's state: an ESC swallowed in one receive() may see
     /// its tail arrive in the next, so the walk lives between calls.
     enum class EscState : std::uint8_t { Ground, Esc, Bracket };
 
-    /// Acts on one complete CSI sequence's final byte ('K', 'J', 'H'); the
-    /// parameters sit in csi_params_, count in csi_param_count_.
+    /// Acts on one complete CSI sequence's final byte ('K', 'J', 'H', 'm');
+    /// the parameters sit in csi_params_, count in csi_param_count_.
     void apply_csi(unsigned char final_byte) noexcept;
+
+    /// Folds one SGR word into the style the next put() dresses its cell in.
+    void style_for_sgr(int word) noexcept;
 
     /// Blanks the inclusive column span on one row, clamped to the grid.
     void erase_cells(int col_from, int col_to, int row) noexcept;
@@ -117,10 +133,13 @@ class Terminal final : public visor::ui::Widget {
     int cols_ = 0;
     int rows_ = 0;
     std::vector<char> cells_;
+    std::vector<CellAttr> attrs_;
     int cursor_col_ = 0;
     int cursor_row_ = 0;
+    CellAttr style_{};
+    bool style_bold_ = false;
     EscState esc_ = EscState::Ground;
-    std::array<int, 2> csi_params_ = {0, 0};
+    std::array<int, 8> csi_params_ = {0, 0, 0, 0, 0, 0, 0, 0};
     int csi_param_count_ = 0;
     bool csi_private_ = false;
 };

@@ -8,10 +8,20 @@ add_executable(vesper.tests main.cpp base/pbm_tests.cpp
                             host/keymap_tests.cpp host/evdev_input_tests.cpp
                             host/fake_host_tests.cpp host/fbdev_device_tests.cpp
                             session/wire_tests.cpp session/remote_canvas_tests.cpp
+                            compositor/server_tests.cpp compositor/sparring_client.cpp
+                            compositor/shm_tests.cpp compositor/surface_tests.cpp
+                            compositor/shell_tests.cpp compositor/seat_tests.cpp
+                            compositor/shell_desk_tests.cpp
+                            compositor/cadence_tests.cpp
+                            compositor/xwayland_tests.cpp
                             assets/font_tests.cpp)
 # The harness headers (cases.hpp, testing.hpp) stay at the tests root, so the
 # subfolder cases reach them through this include path.
 target_include_directories(vesper.tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(vesper.tests PRIVATE vesper.ui)
+# The compositor lane rides the system wayland client beside the server: the
+# sparring partner speaks wl_shm and xdg words of its own, in process.
+target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor
+                                        PkgConfig::VESPER_WAYLAND_CLIENT
+                                        visor.host.posix)
 
 add_test(NAME vesper.tests COMMAND vesper.tests)

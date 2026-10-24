@@ -13,6 +13,7 @@
 #include "visor/bindings/display.hpp"
 #include "visor/bindings/events.hpp"
 #include "visor/bindings/host.hpp"
+#include "visor/bindings/posix/spawn.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +35,10 @@ class FakeColorHost {
         table.flush = &FakeColorHost::flush_thunk;
         table.poll_event = &FakeColorHost::poll_event_thunk;
         table.clock_ms = &FakeColorHost::clock_thunk;
+        // The fake fakes pixels, events and the clock, not births: the
+        // live judgments raise real guests through this table, so the
+        // fourth slot carries the real POSIX filling.
+        table.spawn = &visor::host::spawn_via_posix;
         table.context = this;
         table.info = visor::host::HostInfo{
             .screen = visor::base::SizeI{.w = width_, .h = height_},

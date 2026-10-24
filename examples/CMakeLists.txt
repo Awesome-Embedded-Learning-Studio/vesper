@@ -11,7 +11,8 @@ endif()
 # CTest.
 if(VESPER_WAYLAND_FOUND)
     add_executable(wayland_desktop wayland_desktop.cpp)
-    target_link_libraries(wayland_desktop PRIVATE vesper.ui visor.host.wayland)
+    target_link_libraries(wayland_desktop PRIVATE vesper.ui visor.host.wayland
+                                                     visor.host.posix)
 else()
     message(STATUS "wayland pieces not found: the wayland eyeball example is skipped")
 endif()
@@ -27,3 +28,30 @@ target_link_libraries(d6_block_child PRIVATE vesper.session)
 # every Linux host even where no /dev/fb0 exists to run it against.
 add_executable(fbdev_desktop fbdev_desktop.cpp)
 target_link_libraries(fbdev_desktop PRIVATE vesper.ui)
+
+# The C5 live judgment's X guest: a real X11 program against the bridge.
+# Xlib is the eyeball lane's own system library.
+add_executable(xhello xhello.cpp)
+target_link_libraries(xhello PRIVATE X11::X11)
+
+# The compositor eyeball lane (the C series): the desk as a Wayland client
+# of its host and a Wayland server for its own guests, one window. Needs
+# the wayland client pieces for the output side, so it rides the same
+# optional gate the wayland eyeball lane does.
+if(VESPER_WAYLAND_FOUND)
+    add_executable(compositor_desktop compositor_desktop.cpp)
+    target_link_libraries(compositor_desktop PRIVATE vesper.ui visor.host.wayland
+                                                     vesper.compositor visor.host.posix)
+else()
+    message(STATUS "wayland pieces not found: the compositor eyeball example is skipped")
+endif()
+
+# The compositor lane's living guest: a small Wayland client that bounces
+# on whatever desk carries it -- run it with WAYLAND_DISPLAY pointing at
+# the compositor example's printed socket.
+if(VESPER_WAYLAND_FOUND)
+    add_executable(wl_block wl_block.cpp)
+    target_compile_definitions(wl_block PRIVATE _GNU_SOURCE) # memfd_create
+    target_link_libraries(wl_block PRIVATE PkgConfig::VESPER_WAYLAND_CLIENT
+                                          vesper.wayland.protocol)
+endif()

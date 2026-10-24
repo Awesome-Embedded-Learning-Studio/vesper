@@ -25,8 +25,8 @@
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
 #include "visor/bindings/display.hpp"
-#include "visor/bindings/events.hpp"
 #include "visor/bindings/host.hpp"
+#include "visor/bindings/posix/spawn.hpp"
 #include "visor/bindings/wayland/wayland_window_host.hpp"
 #include "visor/canvas/canvas.hpp"
 #include "visor/canvas/color.hpp"
@@ -180,51 +180,6 @@ void select_icon(Icon& self, void* context) noexcept {
     self.set_selected(true);
 }
 
-/// The wayland host speaks raw evdev key numbers (visor's own line: the
-/// binding that knows a layout produces text, and the wayland binding
-/// deliberately does not), while this desk's terminal eats code points --
-/// the X11 lane never meets the gap because XLookupString folds its keymaps
-/// inside the host. The fbdev lane answered the same gap with the US text
-/// table, and this desk reuses it: a wrapped table whose poll passes every
-/// word through the fold before the desk sees it. Flush and clock pass
-/// straight through their own thunks, each carrying its own context.
-class FoldedKeys {
-  public:
-    explicit FoldedKeys(visor::host::HostTable wrapped) noexcept : wrapped_{wrapped} {}
-
-    [[nodiscard]] visor::host::HostTable table() noexcept {
-        return visor::host::HostTable{
-            .flush = &flush_thunk,
-            .poll_event = &poll_thunk,
-            .clock_ms = &clock_thunk,
-            .context = this,
-            .info = wrapped_.info,
-        };
-    }
-
-  private:
-    static void flush_thunk(void* context, const visor::host::FlushRegion& region) noexcept {
-        const FoldedKeys& self = *static_cast<FoldedKeys*>(context);
-        self.wrapped_.flush(self.wrapped_.context, region);
-    }
-
-    static bool poll_thunk(void* context, visor::host::Event& out) noexcept {
-        const FoldedKeys& self = *static_cast<FoldedKeys*>(context);
-        if (!self.wrapped_.poll(out)) {
-            return false;
-        }
-        out = vesper::host::fold_text(out);
-        return true;
-    }
-
-    static std::uint64_t clock_thunk(void* context) noexcept {
-        const FoldedKeys& self = *static_cast<FoldedKeys*>(context);
-        return self.wrapped_.now_ms();
-    }
-
-    visor::host::HostTable wrapped_;
-};
-
 /// The D6a lane: one spawned child program in one desk window. The frame
 /// size is the construction-time agreement with d6_block_child (200x120),
 /// spelled in the same words on both sides; the child binary is searched
@@ -239,6 +194,7 @@ struct BlockSession {
     RemoteCanvas* canvas = nullptr;
     pid_t pid = -1;
     Desktop* desk = nullptr;
+    const visor::host::HostTable* birth = nullptr;       // the desk's table, for spawning
     std::array<WindowFrame*, 2> peers{nullptr, nullptr}; // the other bands
 };
 
@@ -312,7 +268,7 @@ void open_block(Icon& self, void* context) noexcept {
     std::memcpy(path.data(), exe_dir.data(), dir_len);
     std::memcpy(path.data() + dir_len, "d6_block_child", sizeof("d6_block_child"));
     std::array<char*, 2> argv{path.data(), nullptr};
-    auto child = vesper::session::spawn_child(path.data(), argv.data());
+    auto child = vesper::session::spawn_child(*session.birth, path.data(), argv.data());
     if (!child.has_value()) {
         std::println(stderr, "vesper: cannot spawn the block child at {}", path.data());
         return;
@@ -493,7 +449,11 @@ int main(int argc, char** argv) {
     welcome_win.set_on_focus(&on_frame_focus, &welcome_opener);
 
     Selection selection;
-    BlockSession block{.desk = &desktop};
+    // The desk's own table births the block child: the fourth slot
+    // carries the wiring the wayland host itself never speaks.
+    visor::host::HostTable birth = host.table();
+    birth.spawn = &visor::host::spawn_via_posix;
+    BlockSession block{.desk = &desktop, .birth = &birth};
     block.peers[0] = &welcome_win;
     block.peers[1] = &term_win;
     welcome_opener.block_slot = &block.win;
@@ -519,7 +479,7 @@ int main(int argc, char** argv) {
     welcome_win.close();
     term_win.close();
 
-    FoldedKeys keys{host.table()};
+    vesper::host::TextFoldTable keys{host.table()};
 
     visor::ui::InputRouter input;
     visor::ui::DirtyRegions dirty;

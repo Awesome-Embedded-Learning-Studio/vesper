@@ -10,6 +10,12 @@
 - **D3 终端控件**：字符网格加光标加回显，回环假源离屏判例（80×25，ANSI 先不做）。
 - **D4 真 shell 走 PTY**：forkpty 拉 bash、ANSI 三件（擦行、清屏、定位）、poll 睡法的主循环、三张自栅格化字模，验收从四道变五道（补 TSan）。
 - **D5 fbdev 宿主加裸环境 VM**：fbdev 设备（Mono1 经 visor cinux 扩色进 32bpp 帧）、evdev 输入（visor 翻译层加绝对值折算加 US 键位表）、自组 initramfs（busybox 加静态桌面二进制）、QEMU+KVM 实弹判例（串口标记加截屏像素断言），脚本在 `scripts/vm/`。
+- **C1 合成器心脏**：内嵌 libwayland-server（系统库待遇，scanner 从系统 XML 生成 xdg-shell 双端代码），开 wl_compositor、wl_shm、wl_seat、xdg_wm_base 四全局；shm 池与缓冲、surface 提交状态机、xdg toplevel 生命周期全链可判（陪练 shm 客户端进程内对打，像素经 FakeColorHost 逐字读回），wayland-info 实弹列得出全局，探针在 `examples/compositor_desktop`。
+- **C2 输入**：座位报键盘加指针能力，键盘对象随附 evdev+qwerty 文本键位表，键码 Linux 原生直通（visor 命名方向键折回 evdev 号），修饰键映 xkb 掩码；指针走 v5，滚轮 axis_value120 每档 120 逐轴带 frame；焦点隔离与画布转发（本地坐标折叠）全判例。
+- **C3 窗管理**：ShellDesk 把映射的 toplevel 接进 WindowFrame（瀑布摆位、抬升、互斥焦点、指针跟随换靶、树焦点收回），关闭按钮只发 toplevel close 由宾客自别；隐式抓取继承路由器捕获，判例覆盖拖动、层叠、关闭全链。
+- **C4 帧的礼貌**：帧回调与缓冲释放归 `Server::end_frame` 按桌面节拍发（settle 只递词不结账），缓冲合成即释放（单缓冲客户端千帧零死锁判例），宾客 damage 折进画布局部重画债（角块只触发单条带）。
+- **C5 XWayland**：rootless XWayland 桥用 WAYLAND_SOCKET 递连接、abstract X socket 避开 WSLg 的只读目录，持续服务 Wayland 直到 displayfd 报告就绪。XWM（xcb、xcb-composite 系统库）负责 Composite 重定向、WM_S0、WL_SURFACE_ID 窗口关联与 WM_DELETE_WINDOW 优雅关窗；X 窗口挂桌面侧 shell role，与原生 xdg 窗共用桌面窗口层。实弹判例用 `examples/xhello` 检查像素与正常退出，缺 Xwayland 时响亮跳过。
+- **C6 第四口收官**：宿主表第四口 spawn（路径、argv、env、递 fd）已落上游 visor（spawn-slot 并入 main，env 预算与 CLOEXEC 补件候合并），本仓 child_spawn 与 XWayland::launch 均经第四口出生，提案底稿在 `documents/visor/spawn-fourth-slot-proposal.md`（头部标注落地偏离）。
 
 ## 三级宿主梯队
 

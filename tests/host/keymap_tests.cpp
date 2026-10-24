@@ -72,10 +72,42 @@ void fold_text_rewrites_key_events_only() {
         std::get<KeyUp>(fold_text(Event{KeyUp{.code = 51, .modifiers = Modifiers{.shift = true}}}));
     VESPER_CHECK_EQ(released.code, std::uint32_t{'<'});
 
+    // Space arrives as the evdev 57 and leaves spelled 0x20, so the text
+    // world keeps '9' and space apart.
+    const KeyDown spaced =
+        std::get<KeyDown>(fold_text(Event{KeyDown{.code = 57, .modifiers = Modifiers{}}}));
+    VESPER_CHECK_EQ(spaced.code, 0x20U);
+
     const PointerMove move =
         std::get<PointerMove>(fold_text(Event{PointerMove{.pos = PointI{3, 4}}}));
     VESPER_CHECK_EQ(move.pos.x, 3);
     VESPER_CHECK_EQ(move.pos.y, 4);
+}
+
+void inverse_walk_returns_the_wire_numbers() {
+    // Letters, digits and both spellings of a shifted key go back to the
+    // evdev numbers the wire speaks.
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('a'), 30U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('Z'), 44U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('!'), 2U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('?'), 53U);
+
+    // A digit typed on both blocks takes the main block's key: the wire's
+    // xkb table types the same character from either, so the fold just
+    // picks the first.
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('7'), 8U);
+
+    // Space folds back first: the text world spells it 0x20, the wire
+    // speaks 57, and the digit '9' owns 57 as a code point.
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for(0x20), 57U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('9'), 10U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for('g'), 34U);
+
+    // The core's named keys and everything else the table does not type
+    // come back as zero -- the caller passes them through.
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for(14), 0U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for(28), 0U);
+    VESPER_CHECK_EQ(vesper::host::evdev_code_for(0x110), 0U);
 }
 
 } // namespace
@@ -86,4 +118,5 @@ void run_keymap_tests() {
     keypad_digits_fold();
     named_and_unknown_keys_pass_through();
     fold_text_rewrites_key_events_only();
+    inverse_walk_returns_the_wire_numbers();
 }

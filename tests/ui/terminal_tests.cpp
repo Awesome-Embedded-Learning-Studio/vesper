@@ -18,6 +18,7 @@
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
 #include "visor/ui/run_loop.hpp"
+#include <cstdint>
 
 #include <cstddef>
 #include <string>
@@ -356,5 +357,100 @@ void run_terminal_tests() {
         const PointI caret_mid{cell_w / 2,
                                static_cast<int>(vesper::fonts::kDemoFont.line_height) / 2};
         VESPER_CHECK_EQ(host.get(caret_mid), style::kColorDeskTheme.accent.argb);
+    }
+
+    // The SGR dress, pixel for pixel on a color host: the xterm palette
+    // lands as literal words, style applies only at put time, bold
+    // brightens, reset undresses what comes after it, and erase takes the
+    // dress with the glyph.
+    const auto paint_sgr = [](Terminal& term, FakeColorHost& host) {
+        using SmallFrame =
+            visor::canvas::Canvas<SizeI{.w = 24, .h = 21}, visor::canvas::Xrgb8888Traits>;
+        SmallFrame frame;
+        visor::ui::InputRouter input;
+        term.set_theme(&style::kColorDeskTheme);
+        static_cast<void>(visor::ui::run_once(host.table(), term, input, frame));
+    };
+    const auto ink_count = [](const FakeColorHost& host, std::uint32_t argb, int row) {
+        // One cell row of the 6x7 grid, y in [row*7, row*7+7): the pixels
+        // wearing this word inside that band.
+        int found = 0;
+        for (int y = row * 7; y < (row * 7) + 7 && y < 21; ++y) {
+            for (int x = 0; x < 24; ++x) {
+                if (host.get(PointI{x, y}) == argb) {
+                    ++found;
+                }
+            }
+        }
+        return found;
+    };
+
+    // Dim red fg: the glyph wears 0xcd0000 and nothing else does.
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[31mR");
+        paint_sgr(term, host);
+        VESPER_CHECK(ink_count(host, 0xffcd0000, 0) > 0);
+    }
+    // Style alone dresses nothing: the word must land through put().
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[31m");
+        paint_sgr(term, host);
+        VESPER_CHECK(ink_count(host, 0xffcd0000, 0) == 0);
+    }
+    // Bold brightens: 1;31 is the bright red, not the dim one.
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[1;31mR");
+        paint_sgr(term, host);
+        VESPER_CHECK(ink_count(host, 0xffff0000, 0) > 0);
+        VESPER_CHECK(ink_count(host, 0xffcd0000, 0) == 0);
+    }
+    // A background dress fills the whole cell, even a blank one.
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[41m ");
+        paint_sgr(term, host);
+        VESPER_CHECK(ink_count(host, 0xffcd0000, 0) > 20); // near the whole 4-cell row band
+    }
+    // Reset undresses only what comes after it: the R keeps its red.
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[31mR\x1b[0mG");
+        paint_sgr(term, host);
+        int reds = 0;
+        for (int row = 0; row < 3; ++row) {
+            reds += ink_count(host, 0xffcd0000, row);
+        }
+        VESPER_CHECK(reds > 0);
+        VESPER_CHECK(ink_count(host, 0xffcd0000, 0) == reds); // none past the first cell's row
+    }
+    // Erase takes the dress with the glyph.
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\x1b[31;41mR\x1b[2J");
+        paint_sgr(term, host);
+        int reds = 0;
+        for (int row = 0; row < 3; ++row) {
+            reds += ink_count(host, 0xffcd0000, row);
+        }
+        VESPER_CHECK_EQ(reds, 0);
+    }
+    // The scroll carries the dress: a green G on the second row rides to
+    // the top when the grid gives its bottom row to the newcomer.
+    {
+        FakeColorHost host{24, 21};
+        Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
+        term.receive("\n\x1b[32mG\x1b[0m\n\n");
+        paint_sgr(term, host);
+        VESPER_CHECK(ink_count(host, 0xff00cd00, 0) > 0);  // the dress rode to row 0
+        VESPER_CHECK(ink_count(host, 0xff00cd00, 1) == 0); // and left its old row
     }
 }
