@@ -19,7 +19,7 @@
 - 借壳源唯一：`third_party/visor` 子模块（2026-10-20 作者拍板，不留 VISOR_ROOT 一类逃生口）。钉就是 vesper 历史里的 gitlink，升级等于子模块指针前移一笔提交，两边验收都绿了才动。并排开发在子模块里 checkout 分支干活。
 - tested-against 记在本节：visor @ `4b60639`（merge image-verbs：draw_image 绘制原语三档折叠、clang-tidy 并行化、验收分档 quick/full，前含 wayland 后端、按键重复、事件族头分家、区域成批提交，主树消费方 include 已对齐族头，2026-10-23 双仓实测全绿）。
 - **X11 与 Wayland 只进肉眼通道。** visor.host.x11、visor.host.wayland 只被 examples 的调试目标链接，不进主库、不进验收，验收以 fake host 为准。
-- 待补：终端 16 色 SGR 依赖 visor 侧逐笔墨色绘制原语（现绘制口只认七个语义槽位），已记为上游议题。D5b 按 roadmap 字面收官（wayland 后端与 headless 判例在上游，扩色交付在链路上）；D2 议题已随 visor `5bc71dc` 在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
+- 待补：D6b 任意程序拉起（图标拉起本机任意二进制成窗，spawn 口表形态等 D6a 判例消化后与 visor stage-4 宿主表第四口联动）。终端 16 色 SGR 依赖 visor 侧逐笔墨色绘制原语，已记为上游议题。D6a 已落地（6dd811d，私有通道第一稿）。D5b 按 roadmap 字面收官。D2 议题已随 visor `5bc71dc` 在上游消失，双击手势随 `49f95c0` 落在 visor 路由层，本仓不再持有这两项。
 
 ## 架构边界
 
