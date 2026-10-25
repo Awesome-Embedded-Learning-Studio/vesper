@@ -134,6 +134,19 @@ void run_terminal_birth_tests() {
     VESPER_CHECK(
         await(server, [&] { return distinct_words(server.surface_frame(0), kCellH) >= 3; }));
 
+    // The resize round trip (W2): the desk asks, the program snaps the
+    // want to whole cells, re-cuts grid and planes, and answers with its
+    // next commit's shape. The pty's own size word rides along inside
+    // (set_winsize), so the program behind the screen hears SIGWINCH and
+    // redraws on the new grid -- the echo lane below proves the pump
+    // survived the rebuild.
+    constexpr int k_new_cols = 42;
+    constexpr int k_new_rows = 12;
+    shell->request_resize(k_new_cols * kCellW, k_new_rows * kCellH);
+    VESPER_CHECK(await(server, [&] {
+        return shell->width() == k_new_cols * kCellW && shell->height() == k_new_rows * kCellH;
+    }));
+
     // The echo round trip: a key through the seat, the byte through the
     // pty, and the program's answer back onto the screen as a fresh
     // commit. Enter closes the line so the reader behind the pty gets it.

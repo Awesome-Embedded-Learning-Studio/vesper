@@ -46,6 +46,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <print>
 #include <span>
 #include <vector>
@@ -71,9 +72,12 @@ constexpr int kCellH =
 
 constexpr int kWidth = kCols * kCellW;
 constexpr int kHeight = kRows * kCellH;
-constexpr int kStrideWords = kWidth;
+// The raster's ceiling: faces paint in a window of one maximum-size
+// canvas, so a resize re-cuts the window instead of the storage.
+constexpr int kCanvasMaxW = 1024;
+constexpr int kCanvasMaxH = 768;
 
-using Screen = visor::canvas::Canvas<visor::base::SizeI{.w = kWidth, .h = kHeight},
+using Screen = visor::canvas::Canvas<visor::base::SizeI{.w = kCanvasMaxW, .h = kCanvasMaxH},
                                      visor::canvas::Xrgb8888Traits>;
 constexpr visor::base::RectI kScreenBounds{
     .pos = visor::base::PointI{0, 0},
@@ -114,6 +118,13 @@ struct Guest {
     bool close_requested = false;
     bool shift = false;
     bool ctrl = false;
+    // The face's current shape and the desk's unanswered ask (zero is no
+    // ask standing).
+    int face_w = kWidth;
+    int face_h = kHeight;
+    int pending_w = 0;
+    int pending_h = 0;
+    std::size_t pool_bytes = 0;
     vesper::desktop::Terminal* term = nullptr;
 };
 
@@ -166,10 +177,16 @@ void toplevel_close(void* data, xdg_toplevel* /*toplevel*/) noexcept {
     static_cast<Guest*>(data)->close_requested = true;
 }
 
-void toplevel_configure(void* /*data*/, xdg_toplevel* /*toplevel*/, std::int32_t /*width*/,
-                        std::int32_t /*height*/, wl_array* /*states*/) noexcept {
-    // The desk's shell does not resize windows yet, so the grid keeps the
-    // size it was born with; the sizing words are heard and filed.
+void toplevel_configure(void* data, xdg_toplevel* /*toplevel*/, std::int32_t width,
+                        std::int32_t height, wl_array* /*states*/) noexcept {
+    // The desk's resize ask (W2): taken when it names a shape this screen
+    // can hold, answered once the ack (the xdg configure handler) has
+    // left and the loop comes back around.
+    auto* guest = static_cast<Guest*>(data);
+    if (width > 0 && height > 0 && width <= kCanvasMaxW && height <= kCanvasMaxH) {
+        guest->pending_w = width;
+        guest->pending_h = height;
+    }
 }
 
 const xdg_toplevel_listener kToplevel = {
@@ -287,6 +304,80 @@ const wl_seat_listener kSeat = {
     .name = seat_name,
 };
 
+/// The face's plane size in words, whatever shape it wears today.
+[[nodiscard]] std::size_t plane_words(const Guest& guest) noexcept {
+    return static_cast<std::size_t>(guest.face_w) * static_cast<std::size_t>(guest.face_h);
+}
+
+/// Builds (or rebuilds) the shm side for the face's current shape. The old
+/// words and buffers die first: a face that changed shape has no use for
+/// its old planes. False when the pool refuses, with the old state already
+/// gone -- the caller's honest answer is to quit.
+bool make_pool(Guest& guest) noexcept {
+    for (wl_buffer*& buffer : guest.buffers) {
+        if (buffer != nullptr) {
+            wl_buffer_destroy(buffer);
+            buffer = nullptr;
+        }
+    }
+    if (guest.words != nullptr) {
+        ::munmap(guest.words, guest.pool_bytes);
+        guest.words = nullptr;
+    }
+    const std::size_t plane = plane_words(guest);
+    const std::size_t bytes = plane * 4U * 2U;
+    const int fd = ::memfd_create("vesper-terminal", 0);
+    if (fd < 0 || ::ftruncate(fd, static_cast<off_t>(bytes)) != 0) {
+        return false;
+    }
+    void* map = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (map == MAP_FAILED) {
+        ::close(fd);
+        return false;
+    }
+    guest.words = static_cast<std::uint32_t*>(map);
+    guest.pool_bytes = bytes;
+    wl_shm_pool* pool = wl_shm_create_pool(guest.shm, fd, static_cast<std::int32_t>(bytes));
+    ::close(fd);
+    for (int i = 0; i < 2; ++i) {
+        const auto offset = static_cast<std::int32_t>(static_cast<std::size_t>(i) * plane * 4U);
+        guest.buffers[i] = wl_shm_pool_create_buffer(pool, offset, guest.face_w, guest.face_h,
+                                                     guest.face_w * 4, WL_SHM_FORMAT_XRGB8888);
+        wl_buffer_add_listener(guest.buffers[i], &kBuffer, &guest);
+    }
+    wl_shm_pool_destroy(pool);
+    guest.released = {true, true};
+    guest.active = 0;
+    return guest.buffers[0] != nullptr && guest.buffers[1] != nullptr;
+}
+
+/// Re-cuts the screen side for the desk's resize ask (W2): the want snaps
+/// to whole cells, the grid and the pty's size word follow, and the planes
+/// are rebuilt for the new shape. The history is left behind -- the
+/// program behind the screen redraws its own lines once the pty's new size
+/// reaches it as SIGWINCH.
+void rebuild(Guest& guest, std::optional<vesper::desktop::Terminal>& term,
+             std::optional<vesper::desktop::PtySource>& source,
+             vesper::host::PtySession& session) noexcept {
+    const int cols = std::max(guest.pending_w / kCellW, 1);
+    const int rows = std::max(guest.pending_h / kCellH, 1);
+    guest.face_w = cols * kCellW;
+    guest.face_h = rows * kCellH;
+    guest.pending_w = 0;
+    guest.pending_h = 0;
+    source.reset();
+    term.reset();
+    term.emplace(
+        visor::base::RectI{.pos = visor::base::PointI{0, 0},
+                           .size = visor::base::SizeI{.w = guest.face_w, .h = guest.face_h}},
+        vesper::fonts::term_font::kTermFont);
+    static_cast<void>(session.set_winsize(cols, rows));
+    source.emplace(*term, session);
+    term->set_source(&*source);
+    guest.term = &*term;
+    static_cast<void>(make_pool(guest));
+}
+
 /// One frame: the grid into the canvas, the canvas into a buffer the desk
 /// has released, and the commit that hands it over. False when the desk
 /// still holds both buffers -- the release word (or the next pty byte)
@@ -303,13 +394,26 @@ bool paint(Guest& guest, Screen& screen, vesper::desktop::Terminal& term) noexce
     }
     guest.active = next;
     {
-        const visor::ui::CanvasPainter<Screen> painter{screen, kTheme};
+        // The face is a window of the maximum canvas: the grid paints in
+        // scene coordinates either way, and the window keeps the copy
+        // honest at the face's own shape.
+        const visor::ui::CanvasPainter<Screen> painter{
+            screen,
+            visor::base::RectI{.pos = visor::base::PointI{0, 0},
+                               .size = visor::base::SizeI{.w = guest.face_w, .h = guest.face_h}},
+            kTheme};
         term.draw(painter);
     }
-    std::memcpy(guest.words + (static_cast<std::size_t>(next) * kStrideWords * kHeight),
-                screen.pixels().data(), Screen::kBufferBytes);
+    // Row by row: the canvas stores the maximum width, the face's plane
+    // only its own.
+    for (int row = 0; row < guest.face_h; ++row) {
+        std::memcpy(guest.words + (static_cast<std::size_t>(next) * plane_words(guest)) +
+                        (static_cast<std::size_t>(row) * guest.face_w),
+                    screen.pixels().data() + (static_cast<std::size_t>(row) * Screen::kStrideBytes),
+                    static_cast<std::size_t>(guest.face_w) * 4U);
+    }
     wl_surface_attach(guest.surface, guest.buffers[next], 0, 0);
-    wl_surface_damage(guest.surface, 0, 0, kWidth, kHeight);
+    wl_surface_damage(guest.surface, 0, 0, guest.face_w, guest.face_h);
     wl_callback* beat = wl_surface_frame(guest.surface);
     wl_callback_add_listener(beat, &kFrame, &guest);
     wl_surface_commit(guest.surface);
@@ -356,8 +460,11 @@ int main(int argc, char* argv[]) { // NOLINT(misc-const-correctness)
     static_cast<void>(wl_display_roundtrip(display));
     static_cast<void>(wl_display_roundtrip(display));
 
-    static Screen screen; // the grid's raster: storage, not stack
-    vesper::desktop::Terminal term{kScreenBounds, vesper::fonts::term_font::kTermFont};
+    // The grid's raster at its largest: storage, not stack. Faces paint in
+    // a window of it, and a resize re-cuts the window.
+    static Screen screen;
+    std::optional<vesper::desktop::Terminal> term;
+    std::optional<vesper::desktop::PtySource> source;
     auto session = vesper::host::PtySession::open(program_args.front(), program_args, program_env);
     if (!session.has_value()) {
         std::println(stderr, "vesper-terminal: cannot spawn {} under a pty", program_args.front());
@@ -365,35 +472,16 @@ int main(int argc, char* argv[]) { // NOLINT(misc-const-correctness)
     }
     // The line editor behind the screen redraws against the grid's own
     // cell count, never a guessed default.
-    static_cast<void>(session->set_winsize(term.cols(), term.rows()));
-    vesper::desktop::PtySource source{term, *session};
-    term.set_source(&source);
-    guest.term = &term;
+    term.emplace(kScreenBounds, vesper::fonts::term_font::kTermFont);
+    static_cast<void>(session->set_winsize(term->cols(), term->rows()));
+    source.emplace(*term, *session);
+    term->set_source(&*source);
+    guest.term = &*term;
 
-    // The pool: one memfd, two buffers, the classic pair.
-    constexpr std::size_t plane_words = static_cast<std::size_t>(kStrideWords) * kHeight;
-    constexpr std::size_t pool_bytes = plane_words * 4U * 2U;
-    const int fd = ::memfd_create("vesper-terminal", 0);
-    if (fd < 0 || ::ftruncate(fd, static_cast<off_t>(pool_bytes)) != 0) {
+    if (!make_pool(guest)) {
         std::println(stderr, "vesper-terminal: no pool");
         return 1;
     }
-    void* map = ::mmap(nullptr, pool_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (map == MAP_FAILED) {
-        std::println(stderr, "vesper-terminal: no mapping");
-        return 1;
-    }
-    guest.words = static_cast<std::uint32_t*>(map);
-    wl_shm_pool* pool = wl_shm_create_pool(guest.shm, fd, static_cast<std::int32_t>(pool_bytes));
-    ::close(fd);
-    for (int i = 0; i < 2; ++i) {
-        const auto offset =
-            static_cast<std::int32_t>(static_cast<std::size_t>(i) * plane_words * 4U);
-        guest.buffers[i] = wl_shm_pool_create_buffer(pool, offset, kWidth, kHeight, kWidth * 4,
-                                                     WL_SHM_FORMAT_XRGB8888);
-        wl_buffer_add_listener(guest.buffers[i], &kBuffer, &guest);
-    }
-    wl_shm_pool_destroy(pool);
 
     guest.surface = wl_compositor_create_surface(guest.compositor);
     guest.role_surface = xdg_wm_base_get_xdg_surface(guest.wm_base, guest.surface);
@@ -422,11 +510,18 @@ int main(int argc, char* argv[]) { // NOLINT(misc-const-correctness)
         if ((waiters[0].revents & POLLIN) != 0 && wl_display_dispatch(display) < 0) {
             break; // the desk is gone; there is nothing left to render to
         }
+        // A standing resize ask is answered here, after its ack left with
+        // the dispatch above: the rebuild lands, and the empty new grid
+        // owes its first frame like a birth.
+        if (guest.pending_w != 0) {
+            rebuild(guest, term, source, *session);
+            dirty = true;
+        }
         // The master's error and hangup words count as speech too: a pty
         // whose child left polls POLLERR without POLLIN, and the read that
         // flips child_gone() lives in the pump. Without this the loop
         // spins on an always-ready fd that never says POLLIN again.
-        if ((waiters[1].revents & (POLLIN | POLLERR | POLLHUP)) != 0 && source.pump(0)) {
+        if ((waiters[1].revents & (POLLIN | POLLERR | POLLHUP)) != 0 && source->pump(0)) {
             dirty = true;
         }
         static_cast<void>(wl_display_flush(display));
@@ -434,12 +529,12 @@ int main(int argc, char* argv[]) { // NOLINT(misc-const-correctness)
             // The program behind the screen has left: the farewell line
             // (fed by the pump above or this one) gets its frame, the flush
             // carries it, and the window follows the program out.
-            static_cast<void>(source.pump(0));
-            static_cast<void>(paint(guest, screen, term));
+            static_cast<void>(source->pump(0));
+            static_cast<void>(paint(guest, screen, *term));
             static_cast<void>(wl_display_flush(display));
             break;
         }
-        if (dirty && paint(guest, screen, term)) {
+        if (dirty && paint(guest, screen, *term)) {
             dirty = false;
         }
     }
