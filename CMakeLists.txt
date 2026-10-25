@@ -46,6 +46,11 @@ add_library(vesper.session STATIC src/session/wire.cpp
 target_include_directories(vesper.session PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(vesper.session PUBLIC visor.core)
 
+# The app lane (the roadmap's T series): first-party programs that are guests
+# of the desk, not parts of it. It stands before ui because the desk's host
+# wiring folds text through the table that moved with the terminal lane.
+add_subdirectory(apps/terminal)
+
 # The three layers: base decodes assets, ui carries the desktop modules, host
 # wires the machine.
 add_library(
@@ -53,22 +58,22 @@ add_library(
     src/base/libpbm/pbm.cpp
     src/ui/desktop/desktop.cpp
     src/ui/icon/icon.cpp
-    src/ui/pty_source/pty_source.cpp
     src/ui/shell_desk/shell_desk.cpp
-    src/ui/terminal/terminal.cpp
     src/ui/wayland_canvas/wayland_canvas.cpp
     src/ui/window_frame/window_frame.cpp
     src/host/evdev_input.cpp
     src/host/fake_session_host.cpp
     src/host/fbdev_device.cpp
-    src/host/keymap.cpp
-    src/host/pty.cpp
     src/ui/remote_canvas/remote_canvas.cpp)
 # The asset headers live outside src as art, so assets/ joins the include
 # path: fonts arrive as "fonts/...", icons as "icons/...".
 target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/assets)
+# The desk's host pieces fold raw key numbers into text through the table
+# that lives in the terminal lane (evdev_input, wayland_canvas). The fold
+# straddles the desk/app seam this round; its long-term home is a visor
+# upstreaming conversation, recorded in the roadmap's T-series section.
 target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session
-                                vesper.compositor)
+                                vesper.compositor vesper.terminal)
 
 enable_testing()
 add_subdirectory(tests)

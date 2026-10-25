@@ -4,8 +4,8 @@
 # path. Folders mirror the source tree.
 add_executable(vesper.tests main.cpp base/pbm_tests.cpp
                             ui/desktop_tests.cpp ui/window_frame_tests.cpp
-                            ui/icon_tests.cpp ui/terminal_tests.cpp ui/pty_tests.cpp
-                            host/keymap_tests.cpp host/evdev_input_tests.cpp
+                            ui/icon_tests.cpp apps/terminal_tests.cpp apps/pty_tests.cpp
+                            apps/keymap_tests.cpp host/evdev_input_tests.cpp
                             host/fake_host_tests.cpp host/fbdev_device_tests.cpp
                             session/wire_tests.cpp session/remote_canvas_tests.cpp
                             compositor/server_tests.cpp compositor/sparring_client.cpp
@@ -20,7 +20,7 @@ add_executable(vesper.tests main.cpp base/pbm_tests.cpp
 target_include_directories(vesper.tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # The compositor lane rides the system wayland client beside the server: the
 # sparring partner speaks wl_shm and xdg words of its own, in process.
-target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor
+target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor vesper.terminal
                                         PkgConfig::VESPER_WAYLAND_CLIENT
                                         visor.host.posix)
 
