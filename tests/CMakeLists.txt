@@ -4,7 +4,8 @@
 # path. Folders mirror the source tree.
 add_executable(vesper.tests main.cpp base/pbm_tests.cpp
                             ui/desktop_tests.cpp ui/window_frame_tests.cpp
-                            ui/icon_tests.cpp apps/terminal_tests.cpp apps/pty_tests.cpp
+                            ui/icon_tests.cpp ui/launcher_tests.cpp
+                            apps/terminal_tests.cpp apps/pty_tests.cpp
                             apps/keymap_tests.cpp host/evdev_input_tests.cpp
                             host/fake_host_tests.cpp host/fbdev_device_tests.cpp
                             session/wire_tests.cpp session/remote_canvas_tests.cpp

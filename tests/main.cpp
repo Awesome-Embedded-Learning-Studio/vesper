@@ -17,6 +17,7 @@ int main(int /*argc*/, char** argv) { // NOLINT(misc-const-correctness)
     run_desktop_tests();
     run_window_frame_tests();
     run_icon_tests();
+    run_launcher_tests();
     run_pbm_tests();
     run_terminal_tests();
     run_pty_tests();

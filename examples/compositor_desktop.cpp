@@ -22,6 +22,7 @@
 #include "icons/desktop_icons.hpp"
 #include "ui/desktop/desktop.hpp"
 #include "ui/icon/icon.hpp"
+#include "ui/launcher/launcher.hpp"
 #include "ui/shell_desk/shell_desk.hpp"
 #include "ui/style/style.hpp"
 #include "ui/style/theme.hpp"
@@ -51,11 +52,15 @@
 #include <sys/types.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <new>
 #include <print>
+#include <span>
 #include <string_view>
 #include <utility>
 
@@ -67,7 +72,6 @@ using vesper::desktop::Desktop;
 using vesper::desktop::Icon;
 using vesper::desktop::ShellDesk;
 using vesper::desktop::WindowFrame;
-using vesper::desktop::style::kCaptionGap;
 using vesper::desktop::style::kIconSlotHeight;
 using vesper::desktop::style::kIconSlotWidth;
 using vesper::desktop::style::kPanelHeight;
@@ -188,64 +192,93 @@ void select_icon(Icon& self, void* context) noexcept {
 }
 
 /// The terminal program's binary: the environment's word first (the same
-/// door VESPER_XWAYLAND opens), the running example's own directory second
-/// (the build tree keeps the program a sibling of its desk).
+/// door VESPER_XWAYLAND opens), then the build tree's own layout -- the
+/// desk sits in examples/ while the program sits in apps/terminal/, so
+/// both the neighbor's child and the cousin one directory over are tried.
 const char* terminal_binary() noexcept {
     const char* named = std::getenv("VESPER_TERMINAL");
     if (named != nullptr && named[0] != '\0') {
         return named;
     }
-    static std::array<char, 256> sibling{};
-    if (sibling[0] == '\0') {
-        const ssize_t self = ::readlink("/proc/self/exe", sibling.data(), sibling.size() - 1);
-        if (self <= 0) {
-            return nullptr;
+    constexpr std::string_view k_program_name = "vesper_terminal";
+    for (const std::string_view tail :
+         {std::string_view{"/"}, std::string_view{"/../apps/terminal/"}}) {
+        static std::array<char, 256> beside{};
+        static std::array<char, 256> cousin{};
+        std::array<char, 256>& out = tail.front() == '/' && tail.size() == 1 ? beside : cousin;
+        if (out[0] == '\0') {
+            const ssize_t self = ::readlink("/proc/self/exe", out.data(), out.size() - 1);
+            if (self <= 0) {
+                continue;
+            }
+            out[static_cast<std::size_t>(self)] = '\0';
+            char* slash = std::strrchr(out.data(), '/');
+            if (slash == nullptr) {
+                continue;
+            }
+            ++slash;
+            if (out.size() - static_cast<std::size_t>(slash - out.data()) <
+                tail.size() + k_program_name.size() + 1) {
+                continue;
+            }
+            std::memcpy(slash, tail.data(), tail.size());
+            std::memcpy(slash + tail.size(), k_program_name.data(), k_program_name.size() + 1);
         }
-        sibling[static_cast<std::size_t>(self)] = '\0';
-        char* slash = std::strrchr(sibling.data(), '/');
-        if (slash == nullptr) {
-            return nullptr;
+        if (::access(out.data(), X_OK) == 0) {
+            return out.data();
         }
-        ++slash;
-        constexpr std::string_view k_program_name = "vesper_terminal";
-        if (sibling.size() - static_cast<std::size_t>(slash - sibling.data()) <
-            k_program_name.size() + 1) {
-            return nullptr;
-        }
-        std::memcpy(slash, k_program_name.data(), k_program_name.size() + 1);
     }
-    if (::access(sibling.data(), X_OK) != 0) {
-        return nullptr;
-    }
-    return sibling.data();
+    return nullptr;
 }
 
-/// What the TERMINAL icon needs to birth the program: the server that
-/// adopts the connection, the table whose fourth slot does the birth, and
-/// the spawn that owns the child.
-struct TerminalOpener {
+/// What one registry entry's birth needs beyond its own words: the desk
+/// pieces the fourth slot speaks through, and the book itself.
+struct SpawnOpener {
     Server* server = nullptr;
     const visor::host::HostTable* birth = nullptr;
     GuestSpawn* guest = nullptr;
+    vesper::desktop::Launcher* programs = nullptr;
 };
 
-/// The TERMINAL icon's reaction: birth the program when it is not already
-/// on the desk. Its window lands through the shell like every guest's, and
-/// a second click while it lives is quietly nobody's business.
+/// One icon's seat in the column: the shared opener plus the entry the
+/// icon names, so the reaction knows which program a double click means.
+struct SpawnSeat {
+    SpawnOpener* opener = nullptr;
+    std::size_t index = 0;
+};
+
+/// The registry column's open reaction: birth whatever the entry names,
+/// the same one-live-connection stance the terminal icon taught. Its
+/// window lands through the shell like every guest's, and a second click
+/// while it lives is quietly nobody's business.
 // NOLINTNEXTLINE(misc-const-correctness): the handler type is visor's void*.
-void open_terminal(Icon& /*self*/, void* context) noexcept {
-    const auto* const opener = static_cast<const TerminalOpener*>(context);
+void open_registered(Icon& /*self*/, void* context) noexcept {
+    const auto* const seat = static_cast<const SpawnSeat*>(context);
+    const auto* const opener = seat->opener;
     if (opener->guest->client() != nullptr || opener->guest->alive()) {
         return;
     }
-    const char* binary = terminal_binary();
-    if (binary == nullptr) {
-        std::println(stderr, "vesper-compositor: no terminal program (set VESPER_TERMINAL)");
+    const vesper::desktop::LaunchEntry* entry = opener->programs->at(seat->index);
+    if (entry == nullptr) {
         return;
     }
-    const std::array<const char*, 1> argv{binary};
-    if (!opener->guest->launch(*opener->server, *opener->birth, binary, argv)) {
-        std::println(stderr, "vesper-compositor: the terminal program refused the birth");
+    // The words the fourth slot wants: an empty argv means path alone, a
+    // filled one rides as written, argv[0] included.
+    std::array<const char*, 8> words{};
+    std::size_t count = 0;
+    if (entry->argv.empty()) {
+        words[count++] = entry->path;
+    } else {
+        for (const char* word : entry->argv) {
+            if (count == words.size()) {
+                return; // not birthed half-way past a full word table
+            }
+            words[count++] = word;
+        }
+    }
+    if (!opener->guest->launch(*opener->server, *opener->birth, entry->path,
+                               std::span<const char* const>{words.data(), count})) {
+        std::println(stderr, "vesper-compositor: {} could not be birthed", entry->caption);
     }
 }
 
@@ -331,33 +364,60 @@ int main() {
                 .h = kIconSlotHeight,
             },
     };
-    const RectI term_slot{
-        .pos = PointI{16, 16 + kIconSlotHeight + kCaptionGap},
-        .size =
-            SizeI{
-                .w = kIconSlotWidth,
-                .h = kIconSlotHeight,
-            },
-    };
     Icon welcome_icon{welcome_slot, welcome_layers, "WELCOME", vesper::fonts::ui::kUiFont};
-    Icon term_icon{term_slot, term_layers, "TERMINAL", vesper::fonts::ui::kUiFont};
 
-    // The openers: the about window keeps its band, the terminal icon
-    // births the program (a guest window makes its own band).
+    // The registry: the column's data half, one row per launchable
+    // program. The terminal is the first entry; the next program is a new
+    // row, never new desk code.
+    vesper::desktop::Launcher programs{welcome_slot};
+    if (const char* binary = terminal_binary(); binary != nullptr) {
+        static_cast<void>(programs.add(
+            {.caption = "TERMINAL", .layers = term_layers, .path = binary, .argv = {}}));
+    } else {
+        std::println(stderr, "vesper-compositor: no terminal program (set VESPER_TERMINAL)");
+    }
+
+    // The openers: the about window keeps its band, the registry column
+    // births programs (a guest window makes its own band).
     Opener welcome_opener{.win = &welcome_win, .other = nullptr, .desk = &desk};
     welcome_win.set_on_focus(&on_local_focus, &welcome_opener);
-    TerminalOpener terminal_opener{.server = &server, .birth = &birth, .guest = &terminal};
+    SpawnOpener spawn_opener{
+        .server = &server,
+        .birth = &birth,
+        .guest = &terminal,
+        .programs = &programs,
+    };
 
     Selection selection;
     welcome_icon.set_on_activate(&open_window, &welcome_opener);
-    term_icon.set_on_activate(&open_terminal, &terminal_opener);
     welcome_icon.set_on_select(&select_icon, &selection);
-    term_icon.set_on_select(&select_icon, &selection);
+
+    // The column's widget half: one icon per entry, built and wired from
+    // the entry's own words.
+    std::array<std::unique_ptr<vesper::desktop::Icon>, vesper::desktop::Launcher::kCapacity>
+        program_icons{};
+    std::array<SpawnSeat, vesper::desktop::Launcher::kCapacity> program_seats{};
+    for (std::size_t i = 0; i < programs.count(); ++i) {
+        const vesper::desktop::LaunchEntry* entry = programs.at(i);
+        program_icons[i] =
+            std::unique_ptr<vesper::desktop::Icon>{new (std::nothrow) vesper::desktop::Icon{
+                programs.slot_for(i), entry->layers, entry->caption, vesper::fonts::ui::kUiFont}};
+        if (program_icons[i] == nullptr) {
+            continue;
+        }
+        program_seats[i] = SpawnSeat{.opener = &spawn_opener, .index = i};
+        program_icons[i]->set_on_activate(&open_registered, &program_seats[i]);
+        program_icons[i]->set_on_select(&select_icon, &selection);
+    }
 
     // Icons first, windows after: later children paint on top, so an open
     // window never hides behind an icon it covers.
-    if (!desktop.add_child(&welcome_icon) || !desktop.add_child(&term_icon) ||
-        !welcome_win.initialize() || !welcome_win.set_content(&welcome) ||
+    bool tree_ok = desktop.add_child(&welcome_icon);
+    for (std::size_t i = 0; i < programs.count(); ++i) {
+        tree_ok =
+            tree_ok && program_icons[i] != nullptr && desktop.add_child(program_icons[i].get());
+    }
+    if (!tree_ok || !welcome_win.initialize() || !welcome_win.set_content(&welcome) ||
         !desktop.add_child(&welcome_win)) {
         std::println(stderr, "vesper-compositor: the desktop's child table is full");
         return 1;

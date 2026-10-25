@@ -58,6 +58,7 @@ add_library(
     src/base/libpbm/pbm.cpp
     src/ui/desktop/desktop.cpp
     src/ui/icon/icon.cpp
+    src/ui/launcher/launcher.cpp
     src/ui/shell_desk/shell_desk.cpp
     src/ui/wayland_canvas/wayland_canvas.cpp
     src/ui/window_frame/window_frame.cpp
