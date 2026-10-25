@@ -8,26 +8,23 @@
 // closable by the box, one keyboard between them.
 //
 // The old desk's own furniture rides along: the icon column on the left
-// (double-click WELCOME for the about box, TERMINAL for a real bash
-// terminal on a pty), and one keyboard between everything -- a guest face,
-// a terminal, whatever the pointer touched last. The host window's own
-// close ends the run.
+// (double-click WELCOME for the about box, TERMINAL for the real terminal
+// program birthed through the fourth slot), and one keyboard between
+// everything -- a guest face, the terminal's face, whatever the pointer
+// touched last. The host window's own close ends the run.
+#include "compositor/guest_spawn.hpp"
 #include "compositor/server.hpp"
 #include "compositor/xwayland.hpp"
 
-#include "fonts/term_font.hpp"
 #include "fonts/title_font.hpp"
 #include "fonts/ui_font.hpp"
 #include "host/keymap.hpp"
-#include "host/pty.hpp"
 #include "icons/desktop_icons.hpp"
 #include "ui/desktop/desktop.hpp"
 #include "ui/icon/icon.hpp"
-#include "ui/pty_source/pty_source.hpp"
 #include "ui/shell_desk/shell_desk.hpp"
 #include "ui/style/style.hpp"
 #include "ui/style/theme.hpp"
-#include "ui/terminal/terminal.hpp"
 #include "ui/window_frame/window_frame.hpp"
 
 #include "visor/base/geometry/point.hpp"
@@ -49,21 +46,26 @@
 #include "visor/ui/widgets/widget.hpp"
 
 #include <poll.h>
+#include <unistd.h>
+
+#include <sys/types.h>
 
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <print>
+#include <string_view>
 #include <utility>
 
 namespace {
 
+using vesper::compositor::GuestSpawn;
 using vesper::compositor::Server;
 using vesper::desktop::Desktop;
 using vesper::desktop::Icon;
-using vesper::desktop::PtySource;
 using vesper::desktop::ShellDesk;
-using vesper::desktop::Terminal;
 using vesper::desktop::WindowFrame;
 using vesper::desktop::style::kCaptionGap;
 using vesper::desktop::style::kIconSlotHeight;
@@ -185,6 +187,68 @@ void select_icon(Icon& self, void* context) noexcept {
     self.set_selected(true);
 }
 
+/// The terminal program's binary: the environment's word first (the same
+/// door VESPER_XWAYLAND opens), the running example's own directory second
+/// (the build tree keeps the program a sibling of its desk).
+const char* terminal_binary() noexcept {
+    const char* named = std::getenv("VESPER_TERMINAL");
+    if (named != nullptr && named[0] != '\0') {
+        return named;
+    }
+    static std::array<char, 256> sibling{};
+    if (sibling[0] == '\0') {
+        const ssize_t self = ::readlink("/proc/self/exe", sibling.data(), sibling.size() - 1);
+        if (self <= 0) {
+            return nullptr;
+        }
+        sibling[static_cast<std::size_t>(self)] = '\0';
+        char* slash = std::strrchr(sibling.data(), '/');
+        if (slash == nullptr) {
+            return nullptr;
+        }
+        ++slash;
+        constexpr std::string_view k_program_name = "vesper_terminal";
+        if (sibling.size() - static_cast<std::size_t>(slash - sibling.data()) <
+            k_program_name.size() + 1) {
+            return nullptr;
+        }
+        std::memcpy(slash, k_program_name.data(), k_program_name.size() + 1);
+    }
+    if (::access(sibling.data(), X_OK) != 0) {
+        return nullptr;
+    }
+    return sibling.data();
+}
+
+/// What the TERMINAL icon needs to birth the program: the server that
+/// adopts the connection, the table whose fourth slot does the birth, and
+/// the spawn that owns the child.
+struct TerminalOpener {
+    Server* server = nullptr;
+    const visor::host::HostTable* birth = nullptr;
+    GuestSpawn* guest = nullptr;
+};
+
+/// The TERMINAL icon's reaction: birth the program when it is not already
+/// on the desk. Its window lands through the shell like every guest's, and
+/// a second click while it lives is quietly nobody's business.
+// NOLINTNEXTLINE(misc-const-correctness): the handler type is visor's void*.
+void open_terminal(Icon& /*self*/, void* context) noexcept {
+    const auto* const opener = static_cast<const TerminalOpener*>(context);
+    if (opener->guest->client() != nullptr || opener->guest->alive()) {
+        return;
+    }
+    const char* binary = terminal_binary();
+    if (binary == nullptr) {
+        std::println(stderr, "vesper-compositor: no terminal program (set VESPER_TERMINAL)");
+        return;
+    }
+    const std::array<const char*, 1> argv{binary};
+    if (!opener->guest->launch(*opener->server, *opener->birth, binary, argv)) {
+        std::println(stderr, "vesper-compositor: the terminal program refused the birth");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -234,28 +298,10 @@ int main() {
         std::println("vesper-compositor: no X bridge (install xorg-xwayland to arm it)");
     }
 
-    // The terminal in its own window, built at content_area() exactly,
-    // because the frame re-bounds its content to that same rectangle and
-    // the grid is cut at construction.
-    WindowFrame term_win{RectI{.pos = PointI{160, 90}, .size = SizeI{.w = 520, .h = 380}},
-                         "Terminal", vesper::fonts::title::kTitleFont, kWorkArea};
-    Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont};
-    // The program behind the screen: bash on a pty. --norc keeps the
-    // machine's rc files out of a demo, TERM=vt100 gives clear its escape
-    // words and readline's arrows a CSI the screen speaks, and PS1 is a
-    // plain "> " the font can draw.
-    constexpr std::array<const char*, 3> bash_args{"bash", "--norc", "-i"};
-    constexpr std::array<const char*, 2> bash_env{"TERM=vt100", "PS1=> "};
-    auto bash_session = vesper::host::PtySession::open("/bin/bash", bash_args, bash_env);
-    if (!bash_session.has_value()) {
-        std::println(stderr, "vesper-compositor: cannot spawn bash under a pty");
-        return 1;
-    }
-    // The line editor redraws against the screen's own grid, not a guessed
-    // default: the terminal's cell count is the pty's window size.
-    static_cast<void>(bash_session->set_winsize(term.cols(), term.rows()));
-    PtySource term_source{term, *bash_session};
-    term.set_source(&term_source);
+    // The terminal program (T3): born through the fourth slot when the
+    // icon asks, its window arriving through the shell like every guest's.
+    // Declared after the bridge so everything it outlives dies before it.
+    GuestSpawn terminal;
 
     WelcomePanel welcome{RectI{.pos = PointI{0, 0}, .size = SizeI{.w = 210, .h = 87}},
                          vesper::fonts::title::kTitleFont, vesper::fonts::ui::kUiFont};
@@ -296,31 +342,29 @@ int main() {
     Icon welcome_icon{welcome_slot, welcome_layers, "WELCOME", vesper::fonts::ui::kUiFont};
     Icon term_icon{term_slot, term_layers, "TERMINAL", vesper::fonts::ui::kUiFont};
 
-    // The openers: each window knows its band-mate, and the terminal seats
-    // its own grid as the keyboard's first stop.
-    Opener welcome_opener{.win = &welcome_win, .other = &term_win, .desk = &desk};
-    Opener term_opener{.win = &term_win, .other = &welcome_win, .desk = &desk, .take_focus = &term};
+    // The openers: the about window keeps its band, the terminal icon
+    // births the program (a guest window makes its own band).
+    Opener welcome_opener{.win = &welcome_win, .other = nullptr, .desk = &desk};
     welcome_win.set_on_focus(&on_local_focus, &welcome_opener);
-    term_win.set_on_focus(&on_local_focus, &term_opener);
+    TerminalOpener terminal_opener{.server = &server, .birth = &birth, .guest = &terminal};
 
     Selection selection;
     welcome_icon.set_on_activate(&open_window, &welcome_opener);
-    term_icon.set_on_activate(&open_window, &term_opener);
+    term_icon.set_on_activate(&open_terminal, &terminal_opener);
     welcome_icon.set_on_select(&select_icon, &selection);
     term_icon.set_on_select(&select_icon, &selection);
 
     // Icons first, windows after: later children paint on top, so an open
     // window never hides behind an icon it covers.
     if (!desktop.add_child(&welcome_icon) || !desktop.add_child(&term_icon) ||
-        !term_win.initialize() || !term_win.set_content(&term) || !desktop.add_child(&term_win) ||
         !welcome_win.initialize() || !welcome_win.set_content(&welcome) ||
         !desktop.add_child(&welcome_win)) {
         std::println(stderr, "vesper-compositor: the desktop's child table is full");
         return 1;
     }
-    // The desk starts with the local windows hidden; the icons open them.
+    // The desk starts with the about window hidden; the icon opens it, and
+    // the terminal arrives only when its icon births the program.
     welcome_win.close();
-    term_win.close();
 
     std::println("vesper-compositor: published {}", socket);
     // Redirected stdout is buffered; the socket's name is the one thing
@@ -350,10 +394,10 @@ int main() {
         };
         static_cast<void>(::poll(&waiter, 1, kTickMs));
 
-        // One desk round: serve the guests and the terminal's program,
-        // render the round's events and debts, then present on this tick.
+        // One desk round: serve the guests, render the round's events and
+        // debts, then present on this tick. The terminal's program pumps
+        // itself inside its own process now.
         desk.pump();
-        static_cast<void>(term_source.pump(0));
         static_cast<void>(visor::ui::run_dirty(table, desktop, input, frame, kScreen, dirty));
         desk.settle_focus();
         desk.collect();

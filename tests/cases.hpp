@@ -23,3 +23,5 @@ void run_compositor_seat_tests();
 void run_compositor_desk_tests();
 void run_compositor_cadence_tests();
 void run_compositor_xwayland_tests();
+void run_compositor_guest_spawn_tests();
+void run_terminal_app_tests();

@@ -34,5 +34,7 @@ int main(int /*argc*/, char** argv) { // NOLINT(misc-const-correctness)
     run_compositor_desk_tests();
     run_compositor_cadence_tests();
     run_compositor_xwayland_tests();
+    run_compositor_guest_spawn_tests();
+    run_terminal_app_tests();
     return vesper::testing::failure_count() == 0 ? 0 : 1;
 }

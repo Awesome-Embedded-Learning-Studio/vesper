@@ -54,7 +54,8 @@ target_include_directories(vesper.wayland.protocol SYSTEM INTERFACE ${VESPER_COM
 # _GNU_SOURCE buys mremap for the shm pool's resize word.
 add_library(vesper.compositor STATIC src/compositor/server.cpp src/compositor/shell.cpp
                                            src/compositor/xwayland.cpp
-                                           src/compositor/shm.cpp src/compositor/seat.cpp src/compositor/surface.cpp)
+                                           src/compositor/shm.cpp src/compositor/seat.cpp src/compositor/surface.cpp
+                                           src/compositor/guest_spawn.cpp)
 target_include_directories(vesper.compositor PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(vesper.compositor PRIVATE _GNU_SOURCE)
 target_link_libraries(vesper.compositor

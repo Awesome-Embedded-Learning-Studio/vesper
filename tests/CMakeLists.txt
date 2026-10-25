@@ -14,6 +14,8 @@ add_executable(vesper.tests main.cpp base/pbm_tests.cpp
                             compositor/shell_desk_tests.cpp
                             compositor/cadence_tests.cpp
                             compositor/xwayland_tests.cpp
+                            compositor/guest_spawn_tests.cpp
+                            apps/terminal_app_tests.cpp
                             assets/font_tests.cpp)
 # The harness headers (cases.hpp, testing.hpp) stay at the tests root, so the
 # subfolder cases reach them through this include path.
@@ -23,5 +25,9 @@ target_include_directories(vesper.tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor vesper.terminal
                                         PkgConfig::VESPER_WAYLAND_CLIENT
                                         visor.host.posix)
+# The terminal app judgment births the real program; the generator hands
+# its built path over as a word.
+target_compile_definitions(vesper.tests PRIVATE
+    VESPER_TERMINAL_PATH="$<TARGET_FILE:vesper_terminal>")
 
 add_test(NAME vesper.tests COMMAND vesper.tests)
