@@ -45,6 +45,12 @@
 - **T3 第四口出生**（2026-10-25 已收官）：出生通道取 WAYLAND_SOCKET 礼物（与 XWayland 同形，socketpair 直连，不落 XDG_RUNTIME_DIR），非原案的 WAYLAND_DISPLAY 文字；通用封装 GuestSpawn 进 vesper.compositor（launch/alive/client，可二次出生）。compositor_desktop 的 TERMINAL 图标由嵌控件改为拉进程（二进制取 VESPER_TERMINAL 或同目录 sibling）。判据达成：guest_spawn_tests（拒坏路径、/bin/true 生死与再出生）加 terminal_app_tests（出生、成窗、标题尺寸、READY 上屏、座位按键经 PTY 回显、Ctrl+D 退出、无僵尸无孤儿连接）。
 - **T4 打磨收尾**（口径收窄）：滚屏携装与 SGR 判例原已收官（随 T1 迁 tests/apps）；退出路径判例并入 terminal_app_tests。resize 与 SIGWINCH 的对拍等 shell 长出 resize 再接，当前无事件来源；光标与选区随做随收（原「终端窗泛化」并入此处）。
 
+## 启动器主线 L 系列（2026-10-25 拍板）
+
+> 作者拍板：T 系列收官后桌面补齐启动器这半边。原 D6b 的注册表方案复活其摆图标半，出生半已随 C6 收官；App 与桌面分家的口径沿用 T 系列。
+
+- **L1 注册表与图标列**（2026-10-25 已收官）：LaunchEntry 加 Launcher 进 vesper.ui（固定容量的数据表加列位步进，判例 tests/ui/launcher_tests 覆盖字词保真、容量拒加、列位步进）。compositor_desktop 的程序图标改由注册表生成，双击经 GuestSpawn 出生条目所指二进制，argv 空即路径独走；加一个程序等于加一行静态数据，桌面代码零改动。终端是第一条（VESPER_TERMINAL 环境词优先，build 树的兄弟与 apps/terminal 表亲目录次之）。
+
 ## 与 Cinux 站 26 的接缝（本仓不碰，但要知道）
 
 - 站 26 内核侧只供三样：fb 设备节点加 mmap、输入事件设备节点（IRQ1 键盘加 IRQ12 鼠标）、PTY（站 23 先行）。信号（站 21）是 PTY 与作业控制的前置。
