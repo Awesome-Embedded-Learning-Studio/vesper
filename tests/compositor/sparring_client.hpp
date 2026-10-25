@@ -111,6 +111,12 @@ class SparringClient {
     /// The desk's close word arrived.
     [[nodiscard]] bool close_requested() const noexcept { return close_requested_; }
 
+    /// The last toplevel configure's size words. -1 before any configure
+    /// carried a size; the birth configure's zeroes read as zeroes, the
+    /// desk's resize asks read as the sizes the judgment sent.
+    [[nodiscard]] std::int32_t last_configure_w() const noexcept { return last_configure_w_; }
+    [[nodiscard]] std::int32_t last_configure_h() const noexcept { return last_configure_h_; }
+
     /// Retires the shell pair (toplevel, then xdg_surface) the careful way.
     void retire_toplevel() noexcept;
 
@@ -204,6 +210,7 @@ class SparringClient {
     void note_release() noexcept;
     void note_configure(std::uint32_t serial) noexcept;
     void note_close() noexcept;
+    void note_toplevel_configure(std::int32_t width, std::int32_t height) noexcept;
     // The seat listeners' hands: the proxies they create land here, the
     // words they receive land in the records below.
     /// Asks to draw the pointer's own cursor, the word weston-terminal
@@ -252,6 +259,8 @@ class SparringClient {
     int release_count_ = 0;
     bool xdg_configured_ = false;
     bool close_requested_ = false;
+    std::int32_t last_configure_w_ = -1;
+    std::int32_t last_configure_h_ = -1;
     std::array<KeyWord, kInputCapacity> keys_{};
     std::size_t key_count_ = 0;
     std::array<PointWord, kInputCapacity> motions_{};

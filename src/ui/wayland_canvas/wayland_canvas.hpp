@@ -32,11 +32,28 @@ namespace vesper::desktop {
  */
 class WaylandCanvas final : public visor::ui::Widget {
   public:
+    /// @brief What a corner drag calls with the wanted face size: the
+    ///        desk's cue to ask the guest for a new face (W1's gesture).
+    using ResizeHandler = void (*)(WaylandCanvas& self, visor::base::SizeI wanted, void* context);
+
+    /// The corner grip's side, in pixels: presses inside the bottom-right
+    /// square of this size belong to the desk's resize, not the guest.
+    static constexpr int kResizeGrip = 10;
+
+    /// The smallest face the grip will ask for; a grid thinner than one
+    /// glyph row is a frame, not a face.
+    static constexpr int kMinFace = 32;
+
     /// The shell surface whose pixels this canvas shows and the seat whose
     /// wire the input rides (a null seat keeps the widget display-only);
     /// both pointers are borrowed for the widget's whole life.
     WaylandCanvas(visor::base::RectI bounds, compositor::ShellSurface* shell,
                   compositor::Seat* seat = nullptr) noexcept;
+
+    /// Wires the corner drag's reaction; a canvas with no handler keeps
+    /// the grip quiet (the press forwards to the guest as always), the
+    /// same stance an unwired close box takes.
+    void set_on_resize(ResizeHandler handler, void* context = nullptr) noexcept;
 
     /// The desk's word after a dispatch round: whatever the guest last
     /// committed owes a repaint. The whole face, for the rounds that
@@ -69,6 +86,9 @@ class WaylandCanvas final : public visor::ui::Widget {
 
     compositor::ShellSurface* shell_;
     compositor::Seat* seat_;
+    ResizeHandler on_resize_ = nullptr;
+    void* resize_context_ = nullptr;
+    bool resizing_ = false;
 };
 
 } // namespace vesper::desktop

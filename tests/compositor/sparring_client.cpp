@@ -55,9 +55,9 @@ void on_xdg_surface_configure(void* data, xdg_surface* /*xdg_surface*/,
     static_cast<SparringClient*>(data)->note_configure(serial);
 }
 
-void on_toplevel_configure(void* /*data*/, xdg_toplevel* /*toplevel*/, std::int32_t /*width*/,
-                           std::int32_t /*height*/, wl_array* /*states*/) noexcept {
-    // Sizing words travel on the xdg_surface configure; nothing to do.
+void on_toplevel_configure(void* data, xdg_toplevel* /*toplevel*/, std::int32_t width,
+                           std::int32_t height, wl_array* /*states*/) noexcept {
+    static_cast<SparringClient*>(data)->note_toplevel_configure(width, height);
 }
 
 void on_toplevel_close(void* data, xdg_toplevel* /*toplevel*/) noexcept {
@@ -427,6 +427,11 @@ void SparringClient::note_configure(std::uint32_t serial) noexcept {
 
 void SparringClient::note_close() noexcept {
     close_requested_ = true;
+}
+
+void SparringClient::note_toplevel_configure(std::int32_t width, std::int32_t height) noexcept {
+    last_configure_w_ = width;
+    last_configure_h_ = height;
 }
 
 void SparringClient::record_motion(std::int32_t x, std::int32_t y) noexcept {

@@ -99,6 +99,10 @@ class ShellDesk {
     static void on_shell_unmap(compositor::ShellSurface& shell, void* context) noexcept;
     static void on_frame_focus(WindowFrame& frame, void* context) noexcept;
     static void on_frame_close(WindowFrame& frame, void* context) noexcept;
+    /// The corner drag's word: the wanted face clamped into the desktop,
+    /// then the resize ask the guest answers with its next commit.
+    static void on_face_resize(WaylandCanvas& canvas, visor::base::SizeI wanted,
+                               void* context) noexcept;
 
     void handle_map(compositor::ShellSurface& shell) noexcept;
     void handle_unmap(compositor::ShellSurface& shell) noexcept;
@@ -119,6 +123,7 @@ class ShellDesk {
     [[nodiscard]] Slot* topmost_slot() noexcept;
     [[nodiscard]] Slot* slot_of(const compositor::ShellSurface* shell) noexcept;
     [[nodiscard]] Slot* slot_of_frame(const WindowFrame& frame) noexcept;
+    [[nodiscard]] Slot* slot_of_canvas(const WaylandCanvas& canvas) noexcept;
     void drop_slot(Slot& slot) noexcept;
 
     Desktop& desktop_;

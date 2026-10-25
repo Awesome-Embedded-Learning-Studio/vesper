@@ -139,6 +139,14 @@ void WindowFrame::set_position(PointI pos) noexcept {
     layout_children();
 }
 
+void WindowFrame::reshape(SizeI size) noexcept {
+    if (size.w == bounds().size.w && size.h == bounds().size.h) {
+        return;
+    }
+    set_bounds(RectI{.pos = bounds().pos, .size = size});
+    layout_children();
+}
+
 void WindowFrame::set_on_close(CloseHandler handler, void* context) noexcept {
     on_close_ = handler;
     close_context_ = context;

@@ -63,6 +63,14 @@ class ShellSurface {
     /// how to answer.
     void request_close() noexcept;
 
+    /// The desk's resize word (the roadmap's W1): a toplevel configure
+    /// carrying the wanted face size. The guest answers its own way -- an
+    /// ack, then a commit of whatever face it settled on -- and the desk
+    /// reads the result through width()/height() as it always has. A shell
+    /// with no xdg pair (an X-adopted face) has no door to knock on, and
+    /// the call is quietly nobody's business.
+    void request_resize(int width, int height) noexcept;
+
     /// The protocol tables' hands, the same shape visor's hosts give their
     /// Wiring: every request that reaches into this object's state is a
     /// static member here, declared for the tables and defined in the
@@ -106,6 +114,11 @@ class ShellBook {
     void remove(ShellSurface* shell) noexcept;
     [[nodiscard]] std::size_t count() const noexcept { return count_; }
     [[nodiscard]] ShellSurface* at(std::size_t index) const noexcept;
+
+    /// The next configure serial, counted up as handed out: a configure
+    /// and its ack only ever meet each other, and the shell's own asks
+    /// draw from the same counter the birth configure did.
+    [[nodiscard]] std::uint32_t next_serial() noexcept { return ++next_serial_; }
 
     ShellHooks hooks{};
 

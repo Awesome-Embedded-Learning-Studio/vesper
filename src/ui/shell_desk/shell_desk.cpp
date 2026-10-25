@@ -15,6 +15,7 @@
 
 #include "visor/ui/widgets/widget.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <new>
 
@@ -78,6 +79,19 @@ void ShellDesk::collect() noexcept {
         const compositor::Surface::Frame frame = slot.shell->surface()->frame();
         if (frame.epoch != slot.epoch) {
             slot.epoch = frame.epoch;
+            // A resized guest answers its configure with a new-shaped face;
+            // the frame follows before the repaint debt lands, so the debt
+            // covers the face the window now wears instead of the one it
+            // was born with.
+            const auto& face = frame.view;
+            if (face.words != nullptr && (face.width != slot.canvas->bounds().size.w ||
+                                          face.height != slot.canvas->bounds().size.h)) {
+                const int chrome_w = 2 * (1 + style::kContentPadding);
+                const int chrome_h =
+                    WindowFrame::kTitleBarHeight + 1 + (2 * style::kContentPadding);
+                slot.frame->reshape(
+                    visor::base::SizeI{.w = face.width + chrome_w, .h = face.height + chrome_h});
+            }
             slot.canvas->note_damage(frame.damage);
         }
     }
@@ -192,6 +206,26 @@ void ShellDesk::on_frame_close(WindowFrame& frame, void* context) noexcept {
     }
 }
 
+void ShellDesk::on_face_resize(WaylandCanvas& canvas, visor::base::SizeI wanted,
+                               void* context) noexcept {
+    // The grip spoke; the desk clamps the want into its own bounds (the
+    // face cannot push its frame past the desktop's edge) and asks. The
+    // window follows when the guest answers, not when the grip moves --
+    // the guest owns the pace, the same way it owns the close.
+    auto* desk = static_cast<ShellDesk*>(context);
+    const Slot* slot = desk->slot_of_canvas(canvas);
+    if (slot == nullptr || slot->shell == nullptr || slot->frame == nullptr) {
+        return;
+    }
+    const int chrome_w = 2 * (1 + style::kContentPadding);
+    const int chrome_h = WindowFrame::kTitleBarHeight + 1 + (2 * style::kContentPadding);
+    const int slack_w = desk->desktop_.bounds().size.w - slot->frame->bounds().pos.x - chrome_w;
+    const int slack_h = desk->desktop_.bounds().size.h - slot->frame->bounds().pos.y - chrome_h;
+    const int width = std::clamp(wanted.w, WaylandCanvas::kMinFace, std::max(slack_w, 1));
+    const int height = std::clamp(wanted.h, WaylandCanvas::kMinFace, std::max(slack_h, 1));
+    slot->shell->request_resize(width, height);
+}
+
 void ShellDesk::handle_map(compositor::ShellSurface& shell) noexcept {
     Slot* slot = nullptr;
     for (Slot& candidate : slots_) {
@@ -235,6 +269,7 @@ void ShellDesk::handle_map(compositor::ShellSurface& shell) noexcept {
     static_cast<void>(frame->set_content(canvas));
     frame->set_on_focus(&ShellDesk::on_frame_focus, this);
     frame->set_on_close(&ShellDesk::on_frame_close, this);
+    canvas->set_on_resize(&ShellDesk::on_face_resize, this);
     *slot = Slot{
         .shell = &shell,
         .frame = frame,
@@ -335,6 +370,15 @@ ShellDesk::Slot* ShellDesk::slot_of(const compositor::ShellSurface* shell) noexc
 ShellDesk::Slot* ShellDesk::slot_of_frame(const WindowFrame& frame) noexcept {
     for (Slot& slot : slots_) {
         if (slot.frame == &frame) {
+            return &slot;
+        }
+    }
+    return nullptr;
+}
+
+ShellDesk::Slot* ShellDesk::slot_of_canvas(const WaylandCanvas& canvas) noexcept {
+    for (Slot& slot : slots_) {
+        if (slot.canvas == &canvas) {
             return &slot;
         }
     }

@@ -82,6 +82,12 @@ class WindowFrame final : public visor::ui::Widget {
     /// them all, the rest is thrift for the renderer's strip replay.
     void set_position(visor::base::PointI pos) noexcept;
 
+    /// Resizes the frame in place, the position kept (W2's follow): the
+    /// band keeps its height and the children re-seat through the same
+    /// layout walk set_position takes, so a face that grew or shrank never
+    /// strands its content.
+    void reshape(visor::base::SizeI size) noexcept;
+
     /// Takes the window off the screen. The visibility flip reports the
     /// frame's box on its own, so the ground shows through where the window
     /// stood; state and content stay as they are for a later re-showing.

@@ -251,6 +251,20 @@ void ShellSurface::request_close() noexcept {
     }
 }
 
+void ShellSurface::request_resize(int width, int height) noexcept {
+    if (toplevel_ == nullptr || xdg_surface_ == nullptr) {
+        return;
+    }
+    // The same pair of words the birth configure sends, this time carrying
+    // a size: the guest acks, commits the face it settled on, and the
+    // desk's width()/height() read the answer off that commit.
+    struct wl_array states; // still the honest empty state set
+    wl_array_init(&states);
+    xdg_toplevel_send_configure(toplevel_, width, height, &states);
+    xdg_surface_send_configure(xdg_surface_, book_->next_serial());
+    wl_array_release(&states);
+}
+
 void ShellSurface::commit_notice(Surface& surface, void* context) noexcept {
     auto* shell = static_cast<ShellSurface*>(context);
     const bool content = surface.frame().view.words != nullptr;
@@ -387,8 +401,8 @@ void ShellSurface::Wiring::toplevel_set_title(wl_client* /*client*/, wl_resource
 void ShellSurface::Wiring::xdg_surface_ack_configure(wl_client* /*client*/, wl_resource* resource,
                                                      std::uint32_t /*serial*/) noexcept {
     // Any ack unlocks buffer commits: the serial the guest answers is the
-    // serial the desk sent, and this desk sends one configure per toplevel
-    // birth.
+    // serial the desk sent, and this desk's configures are the toplevel's
+    // birth and its resize asks.
     shell_of(resource)->acked_ = true;
 }
 

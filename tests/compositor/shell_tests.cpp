@@ -235,6 +235,45 @@ void run_desk_pixel_tests() {
     VESPER_CHECK(host.get(PointI{content.pos.x + 70, content.pos.y + 2}) != kAmber);
 }
 
+/// The desk's resize ask (W1) end to end: the configure carries the size,
+/// the guest acks and commits a face of that shape, and the desk's own
+/// width()/height() read the answer back.
+void run_resize_tests() {
+    Lane lane;
+    VESPER_CHECK(lane.up);
+    // The pool sized for two full faces of the wanted shape.
+    constexpr int k_wanted_w = 320;
+    constexpr int k_wanted_h = 200;
+    VESPER_CHECK(lane.client.survey_globals(lane.server) && lane.client.bind_shm() &&
+                 lane.client.bind_compositor() && lane.client.bind_wm_base() &&
+                 lane.client.make_pool(2UZ * k_wanted_w * k_wanted_h * 4U) &&
+                 lane.client.settle(lane.server));
+    VESPER_CHECK(lane.client.make_surface() != nullptr);
+    VESPER_CHECK(lane.client.make_toplevel(lane.server, "Resized"));
+    // The birth configure carries zeroes; the desk's ask carries the size.
+    VESPER_CHECK(lane.server.shell_surface_count() == 1);
+    ShellSurface* shell = lane.server.shell_surface(0);
+    VESPER_CHECK(shell != nullptr);
+    if (shell == nullptr) {
+        return;
+    }
+    shell->request_resize(k_wanted_w, k_wanted_h);
+    VESPER_CHECK(lane.client.settle(lane.server));
+    VESPER_CHECK_EQ(lane.client.last_configure_w(), k_wanted_w);
+    VESPER_CHECK_EQ(lane.client.last_configure_h(), k_wanted_h);
+    // The answer: a buffer of the wanted shape, committed whole.
+    wl_buffer* face =
+        lane.client.make_buffer(0, k_wanted_w, k_wanted_h, k_wanted_w, WL_SHM_FORMAT_XRGB8888);
+    VESPER_CHECK(face != nullptr);
+    lane.client.attach(face);
+    lane.client.damage(0, 0, k_wanted_w, k_wanted_h);
+    lane.client.commit();
+    VESPER_CHECK(lane.client.settle(lane.server));
+    VESPER_CHECK_EQ(shell->width(), k_wanted_w);
+    VESPER_CHECK_EQ(shell->height(), k_wanted_h);
+    VESPER_CHECK(shell->mapped());
+}
+
 } // namespace
 
 void run_compositor_shell_tests() {
@@ -243,4 +282,5 @@ void run_compositor_shell_tests() {
     run_unconfigured_refusal_tests();
     run_destroy_tests();
     run_desk_pixel_tests();
+    run_resize_tests();
 }

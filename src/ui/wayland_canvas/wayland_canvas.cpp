@@ -13,6 +13,8 @@
 
 #include "visor/ui/painter.hpp"
 #include "visor/ui/widgets/widget.hpp"
+
+#include <algorithm>
 #include <cstdint>
 
 namespace vesper::desktop {
@@ -86,9 +88,25 @@ void WaylandCanvas::on_key_up(std::uint32_t code, visor::host::Modifiers modifie
     }
 }
 
+void WaylandCanvas::set_on_resize(ResizeHandler handler, void* context) noexcept {
+    on_resize_ = handler;
+    resize_context_ = context;
+}
+
 void WaylandCanvas::on_pointer_down(visor::base::PointI at,
                                     visor::host::Modifiers modifiers) noexcept {
     static_cast<void>(modifiers); // the pointer wire carries none until grabs land
+    // The desk's own grip: a press in the bottom-right square starts a
+    // resize instead of a guest press, the one corner of the face the
+    // window manager keeps for itself. Capture keeps the moves coming for
+    // the drag's whole life, the band's own trick. The test runs in the
+    // face's own coordinates -- the router's at is the scene's word.
+    const visor::base::PointI face = local(at);
+    if (on_resize_ != nullptr && face.x >= bounds().size.w - kResizeGrip &&
+        face.y >= bounds().size.h - kResizeGrip) {
+        resizing_ = true;
+        return;
+    }
     if (seat_ != nullptr && shell_->surface() != nullptr) {
         seat_->pointer_enter(shell_->surface(), local(at));
         // The primary button, BTN_LEFT's own number: the router's press
@@ -99,6 +117,10 @@ void WaylandCanvas::on_pointer_down(visor::base::PointI at,
 }
 
 void WaylandCanvas::on_pointer_up(visor::base::PointI at) noexcept {
+    if (resizing_) {
+        resizing_ = false;
+        return;
+    }
     if (seat_ != nullptr) {
         seat_->pointer_button(0x110, false);
         static_cast<void>(local(at));
@@ -106,6 +128,19 @@ void WaylandCanvas::on_pointer_up(visor::base::PointI at) noexcept {
 }
 
 void WaylandCanvas::on_pointer_move(visor::base::PointI at) noexcept {
+    if (resizing_) {
+        // The wanted face is the drag's own geometry in face coordinates,
+        // floored at one readable cell block; the desk that wired the
+        // handler clamps the rest (the desktop's edge is its knowledge,
+        // not this widget's).
+        const visor::base::PointI face = local(at);
+        const visor::base::SizeI wanted{
+            .w = std::max(face.x + (kResizeGrip / 2), kMinFace),
+            .h = std::max(face.y + (kResizeGrip / 2), kMinFace),
+        };
+        on_resize_(*this, wanted, resize_context_);
+        return;
+    }
     if (seat_ != nullptr && shell_->surface() != nullptr) {
         seat_->pointer_enter(shell_->surface(), local(at));
     }
