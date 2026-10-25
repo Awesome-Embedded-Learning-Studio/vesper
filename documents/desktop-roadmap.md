@@ -43,7 +43,14 @@
 - **T1 分家立库**（2026-10-25 已收官）：terminal、pty_source、host/pty 三块迁 apps/terminal，立 vesper.terminal 静态库。落地偏离两笔，均记录在案：keymap（US 文本折叠表）一并迁入 app 仓，因为新客户端要从 evdev 键码折回码点，而桌面的 evdev_input 与 wayland_canvas 也用它，vesper.ui 经 PUBLIC 链接续用（这张表的长期家在上游 visor，随 stage-4 再议）；判例随迁 tests/apps/，单一验证入口不变。判据达成：纯搬移零逻辑改动，五道全绿。
 - **T2 客户端本体**（2026-10-25 已收官）：apps/terminal/app 的 vesper_terminal 可执行，Wayland 客户端侧接线齐（连接、双缓冲 shm 画布按 release 节拍、xdg toplevel、帧回调、键码折叠写 PTY、出生时 set_winsize）。网格固定 80x24：shell 尚无 resize，窗口按出生尺寸走。判据达成：headless 判例在测试内起服务端与真程序对打，脚本 PTY 程序吐 READY，网格上屏。
 - **T3 第四口出生**（2026-10-25 已收官）：出生通道取 WAYLAND_SOCKET 礼物（与 XWayland 同形，socketpair 直连，不落 XDG_RUNTIME_DIR），非原案的 WAYLAND_DISPLAY 文字；通用封装 GuestSpawn 进 vesper.compositor（launch/alive/client，可二次出生）。compositor_desktop 的 TERMINAL 图标由嵌控件改为拉进程（二进制取 VESPER_TERMINAL 或同目录 sibling）。判据达成：guest_spawn_tests（拒坏路径、/bin/true 生死与再出生）加 terminal_app_tests（出生、成窗、标题尺寸、READY 上屏、座位按键经 PTY 回显、Ctrl+D 退出、无僵尸无孤儿连接）。
-- **T4 打磨收尾**（口径收窄）：滚屏携装与 SGR 判例原已收官（随 T1 迁 tests/apps）；退出路径判例并入 terminal_app_tests。resize 与 SIGWINCH 的对拍等 shell 长出 resize 再接，当前无事件来源；光标与选区随做随收（原「终端窗泛化」并入此处）。
+- **T4 打磨收尾**（口径收窄）：滚屏携装与 SGR 判例原已收官（随 T1 迁 tests/apps）；退出路径判例并入 terminal_app_tests。resize 与 SIGWINCH 已随 W 系列接通（W2 判例间接覆盖：换尺寸后回显仍走通）；光标与选区随做随收（原「终端窗泛化」并入此处）。
+
+## 窗口缩放主线 W 系列（2026-10-25 拍板）
+
+> 持续推进授权下的自主立线（2026-10-25）：桌面长出窗口缩放，T4 欠的 SIGWINCH 在此接回。
+
+- **W1 尺寸下发与桌面跟随**（2026-10-25 已收官）：ShellSurface::request_resize 发 toplevel configure 带尺寸（与出生 configure 同型的两个字，串号共用 ShellBook 一个计数器）；WaylandCanvas 右下握角（kResizeGrip）起拖，ShellDesk 收拢到桌面边界后下发；客人提交新尺寸后窗框 reshape 跟随（WindowFrame::reshape，子件重走 set_position 同一条布局路）。判据：shell_tests 的 resize 判例，configure 带尺寸、客人整面提交、width 与 height 读回。
+- **W2 终端跟随**（2026-10-25 已收官）：终端程序把要的尺寸对齐整格后重切网格与 shm 面（最大画布开窗绘制、按行拷贝），set_winsize 让内核把新行列作为 SIGWINCH 递给屏后程序，历史不保留（程序自会重画）。判据：terminal_app_tests 换尺寸后形状读回、回显与退出照走。
 
 ## 启动器主线 L 系列（2026-10-25 拍板）
 
