@@ -29,10 +29,21 @@
 - **C2 输入**（2026-10-24 已收官）：座位充实为键盘加指针，桌面事件翻译成协议词发给持焦点的客户端，键码 Linux 原生直通。判据：陪练收到的键盘与指针事件和桌面判例喂进的一致。座位协议版本取舍：绑定 v5、滚轮走 axis_value120（保守起步已拍）。
 - **C3 窗管理**（2026-10-24 已收官）：客户端报的窗接进 WindowFrame，拖动、层级、关闭、互斥焦点走桌面语义，含指针抓取。判据：双客户端同屏判例全过（拖动、层叠、关闭、抓取、焦点移交，tests/compositor/shell_desk_tests）。
 - **C4 帧的礼貌**（2026-10-24 已收官）：帧回调按显示节拍发（Server::end_frame 一拍结账），缓冲合成后释放，damage 只报变化。判据：千帧单缓冲客户端零死锁、计数逐帧对齐、角块 damage 单条带（tests/compositor/cadence_tests）。
-- **C5 XWayland**（2026-10-24）：rootless XWM 路线（不做 X 侧 reparent，不依赖 Xwayland 创建 xdg toplevel），xcb 与 xcb-composite 负责 Composite 重定向、WM_S0、WL_SURFACE_ID、WM_DELETE_WINDOW；桌面侧 shell role 复用窗口层。启动时持续 dispatch/flush Wayland，等待 displayfd 就绪，abstract listener 兼容 WSLg 只读 `/tmp/.X11-unix`。判据：真实 X11 程序（examples/xhello，Xlib 写）在桌面显示琥珀像素、接收关闭消息并以 0 退出；缺 Xwayland 二进制时响亮跳过。
-- **C6 第四口提炼**（2026-10-24 底稿落档）：spawn 形状（路径、参数、环境带 WAYLAND_DISPLAY、递 fd）提炼为 visor 宿主表第四口提案，与 stage-4 联动，Cinux 侧将来同口。判据：提案进上游，两边拍板。底稿在 documents/visor/spawn-fourth-slot-proposal.md，待作者过目。
+- **C5 XWayland**（2026-10-24 已收官）：rootless XWM 路线（不做 X 侧 reparent，不依赖 Xwayland 创建 xdg toplevel），xcb 与 xcb-composite 负责 Composite 重定向、WM_S0、WL_SURFACE_ID、WM_DELETE_WINDOW；桌面侧 shell role 复用窗口层。启动时持续 dispatch/flush Wayland，等待 displayfd 就绪，abstract listener 兼容 WSLg 只读 `/tmp/.X11-unix`。判据：真实 X11 程序（examples/xhello，Xlib 写）在桌面显示琥珀像素、接收关闭消息并以 0 退出；缺 Xwayland 二进制时响亮跳过。
+- **C6 第四口提炼**（2026-10-24 已收官）：spawn 形状（路径、参数、环境带 WAYLAND_DISPLAY、递 fd）提炼为 visor 宿主表第四口提案，与 stage-4 联动，Cinux 侧将来同口。提案已进上游合并（2e6d25c 的 spawn-slot 第四口、4bae5d2 的 env 预算 256 词与原号 gift 摘 CLOEXEC 封条），vesper 侧回填收官，child_spawn 与 XWayland::launch 改走第四口出生，随 d7b685c 上 main。底稿在 documents/visor/spawn-fourth-slot-proposal.md。
 
 资产复用：D6a 的通道与事件平铺、RemoteCanvas 形状（surface 进画布）、draw_image 原语在 C1 与 C3 直接上岗。
+
+## 终端主线 T 系列（2026-10-25 拍板）
+
+> 作者拍板：终端立为主线，长成真程序，App 与桌面分家。第一方 App 落顶层 apps/，terminal/ 打头，慢慢单开。third_party 仍只收借来的独立仓（不增员拍板不动），自家 App 将来独立成仓时再以子模块身份进 third_party。
+
+形态：终端是独立的 Wayland 客户端进程，由桌面经第四口 child_spawn 带着 WAYLAND_DISPLAY 拉起，是 C6 出生通道的第一个真实消费者，也是将来图标启动器点开的第一个程序。分家顺着现成的缝切：Terminal 自带 TerminalSource 接口，键盘字节从 send() 出去、程序字节从 receive() 回来，头文件只依赖 visor，而桌面的 Desktop 控件只有壁纸、面板与横幅，并不知道终端存在。VT 网格（ui/terminal）、PTY 泵（ui/pty_source）、forkpty 开管（host/pty）三块迁入 apps/terminal，桌面本体留窗口宿主、摆放、session 与 compositor。
+
+- **T1 分家立库**（2026-10-25 已收官）：terminal、pty_source、host/pty 三块迁 apps/terminal，立 vesper.terminal 静态库。落地偏离两笔，均记录在案：keymap（US 文本折叠表）一并迁入 app 仓，因为新客户端要从 evdev 键码折回码点，而桌面的 evdev_input 与 wayland_canvas 也用它，vesper.ui 经 PUBLIC 链接续用（这张表的长期家在上游 visor，随 stage-4 再议）；判例随迁 tests/apps/，单一验证入口不变。判据达成：纯搬移零逻辑改动，五道全绿。
+- **T2 客户端本体**（2026-10-25 已收官）：apps/terminal/app 的 vesper_terminal 可执行，Wayland 客户端侧接线齐（连接、双缓冲 shm 画布按 release 节拍、xdg toplevel、帧回调、键码折叠写 PTY、出生时 set_winsize）。网格固定 80x24：shell 尚无 resize，窗口按出生尺寸走。判据达成：headless 判例在测试内起服务端与真程序对打，脚本 PTY 程序吐 READY，网格上屏。
+- **T3 第四口出生**（2026-10-25 已收官）：出生通道取 WAYLAND_SOCKET 礼物（与 XWayland 同形，socketpair 直连，不落 XDG_RUNTIME_DIR），非原案的 WAYLAND_DISPLAY 文字；通用封装 GuestSpawn 进 vesper.compositor（launch/alive/client，可二次出生）。compositor_desktop 的 TERMINAL 图标由嵌控件改为拉进程（二进制取 VESPER_TERMINAL 或同目录 sibling）。判据达成：guest_spawn_tests（拒坏路径、/bin/true 生死与再出生）加 terminal_app_tests（出生、成窗、标题尺寸、READY 上屏、座位按键经 PTY 回显、Ctrl+D 退出、无僵尸无孤儿连接）。
+- **T4 打磨收尾**（口径收窄）：滚屏携装与 SGR 判例原已收官（随 T1 迁 tests/apps）；退出路径判例并入 terminal_app_tests。resize 与 SIGWINCH 的对拍等 shell 长出 resize 再接，当前无事件来源；光标与选区随做随收（原「终端窗泛化」并入此处）。
 
 ## 与 Cinux 站 26 的接缝（本仓不碰，但要知道）
 
