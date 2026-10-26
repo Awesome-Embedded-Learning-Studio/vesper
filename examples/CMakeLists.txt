@@ -41,7 +41,8 @@ target_link_libraries(xhello PRIVATE X11::X11)
 if(VESPER_WAYLAND_FOUND)
     add_executable(compositor_desktop compositor_desktop.cpp)
     target_link_libraries(compositor_desktop PRIVATE vesper.ui visor.host.wayland
-                                                     vesper.compositor visor.host.posix)
+                                                     vesper.compositor vesper.shell
+                                                     visor.host.posix)
 else()
     message(STATUS "wayland pieces not found: the compositor eyeball example is skipped")
 endif()

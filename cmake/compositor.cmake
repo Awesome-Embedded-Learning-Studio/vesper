@@ -1,4 +1,4 @@
-# The compositor lane (the roadmap's C series, documents/desktop-roadmap.md):
+# The compositor lane (the roadmap's C series):
 # vesper grows into a Wayland server beside its host-table output. The server
 # speaks the system libwayland and generates its protocol code with the
 # system wayland-scanner from the system's protocol XML -- the same line the

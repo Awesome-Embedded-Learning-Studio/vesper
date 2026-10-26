@@ -1,6 +1,6 @@
 # vesper 开发工作流
 
-桌面层独立仓，KDE 式起头：纯用户态工程，消费 visor（填它的宿主表），产出可拖窗口的桌面加终端。规划文档 `documents/`（调研九篇、visor 补件提案、路线与 Cinux 接缝见 `documents/desktop-roadmap.md`）。抄来的文件把借据写在自己的头部注释（来源仓与 HEAD、改动摘要），不设集中的留档文档（2026-10-20 作者拍板）。
+桌面层独立仓，KDE 式起头：纯用户态工程，消费 visor（填它的宿主表），产出可拖窗口的桌面加终端。路线与 visor 后到件清单已移出仓库（2026-10-26 作者拍板，私有 .claude 记忆携带），`documents/` 只留调研九篇。抄来的文件把借据写在自己的头部注释（来源仓与 HEAD、改动摘要），不设集中的留档文档（2026-10-20 作者拍板）。
 
 ## 角色分工（沿 visor 口径，2026-10-17 起）
 
@@ -15,7 +15,7 @@
 
 ## 借壳红线（借壳期适用，vendor 后作废）
 
-- **不修改 visor 树内任何文件。** 缺件走上游提（提案束清单见 documents/visor/upgrade-design.md），不私养借壳源。非库目标件例外（Cinux-GUI 的 host 接线、脚本这类），抄写进对应目录，借据写在文件头。
+- **不修改 visor 树内任何文件。** 缺件走上游提（已销提案稿 2026-10-26 核销移除，后到件余量随私有 roadmap 携带），不私养借壳源。非库目标件例外（Cinux-GUI 的 host 接线、脚本这类），抄写进对应目录，借据写在文件头。
 - 借壳源唯一：`third_party/visor` 子模块（2026-10-20 作者拍板，不留 VISOR_ROOT 一类逃生口）。钉就是 vesper 历史里的 gitlink，升级等于子模块指针前移一笔提交，两边验收都绿了才动。并排开发在子模块里 checkout 分支干活。
 - tested-against 记在本节：visor @ `73d76d1`（main，2026-10-24 已推：画笔四动词与两条文本走位的 Ink 裸墨通道，像素参数帮手收拢笔画，逐像素判例入列。前含 4bae5d2 的 spawn env 预算 256 词与原号 gift 摘 CLOEXEC 封条、2e6d25c 的 spawn-slot 第四口 spawn 全家，双仓实测全绿）。
 - **X11 与 Wayland 只进肉眼通道。** visor.host.x11、visor.host.wayland 只被 examples 的调试目标链接，不进主库、不进验收，验收以 fake host 为准。

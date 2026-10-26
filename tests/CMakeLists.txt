@@ -23,7 +23,7 @@ add_executable(vesper.tests main.cpp base/pbm_tests.cpp
 target_include_directories(vesper.tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # The compositor lane rides the system wayland client beside the server: the
 # sparring partner speaks wl_shm and xdg words of its own, in process.
-target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor vesper.terminal
+target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor vesper.shell vesper.terminal
                                         PkgConfig::VESPER_WAYLAND_CLIENT
                                         visor.host.posix)
 # The terminal app judgment births the real program; the generator hands

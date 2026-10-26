@@ -36,6 +36,7 @@
 #include "visor/canvas/color.hpp"
 #include "visor/canvas/pixel_traits.hpp"
 #include "visor/draw/mono_font.hpp"
+#include "visor/ui/canvas_painter.hpp"
 #include "visor/ui/dirty_regions.hpp"
 #include "visor/ui/input_router.hpp"
 #include "visor/ui/painter.hpp"
@@ -53,6 +54,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <print>
+#include <string_view>
 #include <variant>
 
 #include <poll.h>
@@ -71,16 +73,40 @@ using visor::canvas::ColorRole;
 namespace style = vesper::desktop::style;
 using visor::draw::measure_text;
 
-// The desk's logical size. The framebuffer must be at least this big; a
-// bigger one shows the desk in its top-left corner, with 1:1 pixels. The
-// VM's DRM driver can choose a larger mode than the VESA boot request.
-constexpr SizeI kScreen{.w = 640, .h = 480};
-constexpr RectI kScreenBounds{.pos = PointI{0, 0}, .size = kScreen};
-constexpr RectI kWorkArea{
-    .pos = PointI{0, 0},
-    .size = SizeI{.w = kScreen.w, .h = kScreen.h - style::kPanelHeight},
+// Raster storage is a strip; desktop geometry comes from the framebuffer.
+constexpr SizeI kRaster{.w = 4096, .h = 16};
+using Frame = visor::canvas::Canvas<kRaster, visor::canvas::Xrgb8888Traits>;
+
+/// An overlay outside the desktop tree, so the pointer never intercepts hits.
+class SoftwarePointer final : public visor::ui::Widget {
+  public:
+    SoftwarePointer() noexcept : Widget{RectI{.pos = {}, .size = {.w = 12, .h = 18}}} {}
+
+    void move(PointI pos) noexcept { set_bounds(RectI{.pos = pos, .size = bounds().size}); }
+
+  protected:
+    void on_draw(const visor::ui::Painter& painter) const noexcept override {
+        static constexpr std::array<std::string_view, 18> pixels{
+            "#           ", "##          ", "#.#         ", "#..#        ", "#...#       ",
+            "#....#      ", "#.....#     ", "#......#    ", "#.......#   ", "#........#  ",
+            "#.....##### ", "#..#..#     ", "#.# #..#    ", "##  #..#    ", "#    #..#   ",
+            "     #..#   ", "      #..#  ", "      ####  ",
+        };
+        const PointI origin = bounds().pos;
+        int row = 0;
+        for (const std::string_view line : pixels) {
+            int column = 0;
+            for (const char pixel : line) {
+                if (pixel != ' ') {
+                    painter.plot(PointI{origin.x + column, origin.y + row},
+                                 visor::canvas::Ink{pixel == '#' ? 0x000000U : 0xFFFFFFU});
+                }
+                ++column;
+            }
+            ++row;
+        }
+    }
 };
-using Frame = visor::canvas::Canvas<kScreen, visor::canvas::Xrgb8888Traits>;
 
 // The color face: dusk gold over warm paper, the scheme file's own table,
 // riding the same XRGB8888 framebuffer through blit().
@@ -178,6 +204,8 @@ struct FbdevSession {
     vesper::host::EvdevInput keyboard;
     vesper::host::EvdevInput pointer;
     vesper::host::FbdevDevice fb;
+    SoftwarePointer cursor;
+    Frame* frame = nullptr;
     bool trace = false;
     unsigned long loops = 0;
 };
@@ -215,6 +243,8 @@ void trace_event(const FbdevSession& session, const visor::host::Event& event) n
 
 void fbdev_flush(void* context, const visor::host::FlushRegion& region) noexcept {
     auto* const session = static_cast<FbdevSession*>(context);
+    const visor::ui::CanvasPainter<Frame> painter{*session->frame, region.rect, desk_theme};
+    session->cursor.draw(painter);
     session->fb.blit(region.rect, region.pixels, region.stride_bytes);
 }
 
@@ -224,6 +254,9 @@ bool fbdev_poll_event(void* context, visor::host::Event& out) noexcept {
     // have something to say, and the pointer's words wait in their node.
     const bool found = session->keyboard.poll_next(out) || session->pointer.poll_next(out);
     if (found) {
+        if (const auto* move = std::get_if<visor::host::PointerMove>(&out)) {
+            session->cursor.move(move->pos);
+        }
         trace_event(*session, out);
     }
     return found;
@@ -247,30 +280,34 @@ int main(int argc, const char* const* argv) {
         std::println(stderr, "vesper-fbdev: cannot open a 32bpp framebuffer at {}", fb_path);
         return 1;
     }
-    if (session.fb.width() < kScreen.w || session.fb.height() < kScreen.h) {
-        std::println(stderr, "vesper-fbdev: framebuffer is {}x{}, the desk needs at least {}x{}",
-                     session.fb.width(), session.fb.height(), kScreen.w, kScreen.h);
+    const SizeI screen{.w = session.fb.width(), .h = session.fb.height()};
+    const RectI screen_bounds{.pos = PointI{0, 0}, .size = screen};
+    const RectI work_area{
+        .pos = PointI{0, 0},
+        .size = SizeI{.w = screen.w, .h = screen.h - style::kPanelHeight},
+    };
+    if (screen.w < 640 || screen.h < 480 || screen.w > kRaster.w) {
+        std::println(stderr,
+                     "vesper-fbdev: unsupported framebuffer {}x{} (width 640..{}, height >=480)",
+                     screen.w, screen.h, kRaster.w);
         return 1;
     }
-    if (!session.keyboard.open(kbd_path, kScreen)) {
+    if (!session.keyboard.open(kbd_path, screen)) {
         std::println(stderr, "vesper-fbdev: cannot open the keyboard at {}", kbd_path);
         return 1;
     }
-    // The desktop is painted 1:1 in the framebuffer's top-left corner;
-    // tablet coordinates span the entire physical display, not that canvas.
-    const SizeI display{.w = session.fb.width(), .h = session.fb.height()};
-    if (!session.pointer.open(pointer_path, display)) {
+    if (!session.pointer.open(pointer_path, screen)) {
         std::println(stderr, "vesper-fbdev: cannot open the pointer at {}", pointer_path);
         return 1;
     }
     std::println("vesper-fbdev: fb {}x{} (frame {}x{}), kbd {}, pointer {}", session.fb.width(),
-                 session.fb.height(), kScreen.w, kScreen.h, kbd_path, pointer_path);
+                 session.fb.height(), screen.w, screen.h, kbd_path, pointer_path);
 
-    Desktop desktop{kScreenBounds, "VESPER", vesper::fonts::title::kTitleFont, desk_theme};
+    Desktop desktop{screen_bounds, "VESPER", vesper::fonts::title::kTitleFont, desk_theme};
     const SizeI tag_size = measure_text(vesper::fonts::ui::kUiFont, "MONO 1", 1);
     const PointI tag_origin{
-        kScreen.w - style::kContentPadding - tag_size.w,
-        kScreen.h - style::kPanelHeight +
+        screen.w - style::kContentPadding - tag_size.w,
+        screen.h - style::kPanelHeight +
             ((style::kPanelHeight - static_cast<int>(vesper::fonts::ui::kUiFont.line_height)) / 2),
     };
     visor::ui::Label tag{tag_origin, "MONO 1", vesper::fonts::ui::kUiFont, ColorRole::Background};
@@ -315,11 +352,11 @@ int main(int argc, const char* const* argv) {
     WelcomePanel welcome{RectI{.pos = PointI{180, 70}, .size = SizeI{.w = 230, .h = 100}},
                          vesper::fonts::title::kTitleFont, vesper::fonts::ui::kUiFont};
     WindowFrame welcome_win{RectI{.pos = PointI{160, 50}, .size = SizeI{.w = 270, .h = 130}},
-                            "About", vesper::fonts::title::kTitleFont, kWorkArea};
+                            "About", vesper::fonts::title::kTitleFont, work_area};
     Opener welcome_opener{.win = &welcome_win};
 
     WindowFrame term_win{RectI{.pos = PointI{20, 40}, .size = SizeI{.w = 600, .h = 400}},
-                         "Terminal", vesper::fonts::title::kTitleFont, kWorkArea};
+                         "Terminal", vesper::fonts::title::kTitleFont, work_area};
     Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont};
     // The program behind the screen: a plain POSIX shell on a pty. busybox
     // ash is the initramfs citizen; /bin/sh is the same citizen on a dev
@@ -365,7 +402,8 @@ int main(int argc, const char* const* argv) {
     visor::ui::InputRouter input;
     visor::ui::DirtyRegions dirty;
     desktop.set_dirty_sink(&dirty);
-    dirty.push(kScreenBounds);
+    session.cursor.set_dirty_sink(&dirty);
+    dirty.push(screen_bounds);
 
     const visor::host::HostTable table{
         .flush = &fbdev_flush,
@@ -377,6 +415,7 @@ int main(int argc, const char* const* argv) {
     std::println("vesper-fbdev: running; /init's timeout or Ctrl-C ends the run");
     static_cast<void>(std::fflush(stdout));
     Frame frame;
+    session.frame = &frame;
     const char* trace = std::getenv("VESPER_FBDEV_TRACE");
     session.trace = trace != nullptr && std::strcmp(trace, "1") == 0;
     for (;;) {
@@ -395,7 +434,7 @@ int main(int argc, const char* const* argv) {
             },
         };
         const int woke = ::poll(waiters.data(), static_cast<nfds_t>(waiters.size()), 15);
-        const int consumed = visor::ui::run_dirty(table, desktop, input, frame, kScreen, dirty);
+        const int consumed = visor::ui::run_dirty(table, desktop, input, frame, screen, dirty);
         if (session.trace && (woke != 0 || consumed != 0)) {
             std::println("trace[{}] poll={} used={} kbd={} ptr={} pty={}", session.loops, woke,
                          consumed, waiters[0].revents, waiters[1].revents, waiters[2].revents);

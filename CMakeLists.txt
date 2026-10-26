@@ -59,8 +59,6 @@ add_library(
     src/ui/desktop/desktop.cpp
     src/ui/icon/icon.cpp
     src/ui/launcher/launcher.cpp
-    src/ui/shell_desk/shell_desk.cpp
-    src/ui/wayland_canvas/wayland_canvas.cpp
     src/ui/window_frame/window_frame.cpp
     src/host/evdev_input.cpp
     src/host/fake_session_host.cpp
@@ -73,8 +71,17 @@ target_include_directories(vesper.ui PUBLIC ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOUR
 # that lives in the terminal lane (evdev_input, wayland_canvas). The fold
 # straddles the desk/app seam this round; its long-term home is a visor
 # upstreaming conversation, recorded in the roadmap's T-series section.
-target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session
-                                vesper.compositor vesper.terminal)
+target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session vesper.terminal)
+
+# The desk-side companions of the compositor lane (ShellDesk hosting the
+# mapped toplevels, the WaylandCanvas painting guest buffers): they are
+# guests of the server half, so they ride beside it instead of inside ui,
+# keeping every ui consumer -- the fbdev lane's static link included --
+# free of the wayland and xcb system libraries.
+add_library(vesper.shell STATIC src/ui/shell_desk/shell_desk.cpp
+                                src/ui/wayland_canvas/wayland_canvas.cpp)
+target_include_directories(vesper.shell PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(vesper.shell PUBLIC vesper.ui vesper.compositor)
 
 enable_testing()
 add_subdirectory(tests)
