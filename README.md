@@ -6,7 +6,7 @@
 
 vesper 的目标是长成「桌面本体 + 一组应用」的形态：桌面承担程序启动器和窗口宿主，图标拉起真实的程序进程，每个程序一个窗口。视觉走单色（黑白）加圆角的自有风格。
 
-界面绘制与设备接入的底层抽象复用同组织的 [visor](https://github.com/Awesome-Embedded-Learning-Studio/visor)，以 git 子模块接在 `third_party/visor`。vesper 本体专注桌面与窗口逻辑。工程的推进顺序参考了成熟桌面的发展史，对应的一手调研放在 [documents/research/](documents/research/)。
+界面绘制与设备接入的底层抽象复用同组织的 [visor](https://github.com/Awesome-Embedded-Learning-Studio/visor)
 
 ## 功能
 
@@ -42,14 +42,6 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-完整验收共五道，由一个脚本串起来：
-
-```bash
-scripts/checks/acceptance.sh
-```
-
-五道分别是常规构建加全部测试、ASan 加 UBSan（内存错误与未定义行为检查）、TSan（数据竞争检查）、clang-format、clang-tidy。
-
 ### 裸机冒烟（可选）
 
 在 QEMU 虚拟机里启动自建内核加 initramfs，从串口日志找标记、对屏幕截图做像素断言。内核与 busybox 源码由脚本自行下载固定版本。首次按序：
@@ -66,11 +58,11 @@ INPUT=1 scripts/vm/smoke.sh
 
 ## 运行
 
-| 形态 | 怎么跑 | 说明 |
-|---|---|---|
-| 进程内离屏 | `ctest`（见上） | 测试全在此形态 |
-| X11 窗口 | `cmake --build build --target x11_desktop`，然后 `DISPLAY=:0 ./build/examples/x11_desktop` | 最方便的肉眼调试通道 |
-| 裸机 VM | `scripts/vm/smoke.sh` | 不依赖桌面环境的真实通道 |
+| 形态       | 怎么跑                                                                                     | 说明                     |
+| ---------- | ------------------------------------------------------------------------------------------ | ------------------------ |
+| 进程内离屏 | `ctest`（见上）                                                                            | 测试全在此形态           |
+| X11 窗口   | `cmake --build build --target x11_desktop`，然后 `DISPLAY=:0 ./build/examples/x11_desktop` | 最方便的肉眼调试通道     |
+| 裸机 VM    | `scripts/vm/smoke.sh`                                                                      | 不依赖桌面环境的真实通道 |
 
 WSLg 下直接用 `DISPLAY=:0`。走 `localhost:0` 的远程转发链路时窗口可能映射不上，查询类客户端（xdpyinfo、xwininfo）会卡死，直连可解。
 

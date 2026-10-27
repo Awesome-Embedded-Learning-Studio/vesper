@@ -1,14 +1,14 @@
 # 窗口管理与会话理论：ICCCM、EWMH、Wayland 协议族与登录会话
 
-> 调研日期 2026-10-17 · 服务对象：vesper 手搓教学桌面 · 来源：网络检索加本地材料
+> 调研日期 2026-10-17 · 背景：手搓教学桌面项目的立项调研 · 来源：网络检索加本地材料
 
 ## 0. 这份文档回答什么
 
-本篇是窗口与会话两侧的语义采购。回答四组问题：ICCCM 与 EWMH 两份约定到底定了哪些窗口语义（类型、状态、焦点、工作区、装饰协商），焦点两派的取舍与键盘焦点、指针焦点的分离，窗口操作全集的语义边界，以及 Wayland 协议族五件、显示管理器加 logind 加会话恢复这条登录链。收尾对照 vesper 的单色单进程起点，给必做清单、负面清单与 D1、D2 两刀的边界建议。
+本篇是窗口与会话两侧的语义采购。回答四组问题：ICCCM 与 EWMH 两份约定到底定了哪些窗口语义（类型、状态、焦点、工作区、装饰协商），焦点两派的取舍与键盘焦点、指针焦点的分离，窗口操作全集的语义边界，以及 Wayland 协议族五件、显示管理器加 logind 加会话恢复这条登录链。收尾站在一个单进程起步的自研桌面立场，给必做清单与负面清单。
 
-一个贯穿全篇的观察先摆出来。ICCCM 与 EWMH 是客户端与窗口管理器之间的纸面约定，全部住在用户态。X server 只提供重定向与叠放这类原语，内核对「窗口」一无所知，窗口管理是用户态的政策，这两份文档本身就是证据。反方向，logind 与 seat 是桌面里真正长在操作系统上的那一小段：设备归属、会话边界、VT 管辖。vesper 的三梯队恰好横跨两端。
+一个贯穿全篇的观察先摆出来。ICCCM 与 EWMH 是客户端与窗口管理器之间的纸面约定，全部住在用户态。X server 只提供重定向与叠放这类原语，内核对「窗口」一无所知，窗口管理是用户态的政策，这两份文档本身就是证据。反方向，logind 与 seat 是桌面里真正长在操作系统上的那一小段：设备归属、会话边界、VT 管辖。一个从 X11 调试起步、最终落到裸 fbdev 的项目恰好横跨两端。
 
-方法论也定在这里。vesper 单进程起步，WM 与「客户端」住在同一进程，ICCCM 与 EWMH 的线格式（atom、ClientMessage）对 vesper 没有意义，但它们整理出的语义清单是窗口件数据结构的一手设计参照。借语义，不搬线格式。
+方法论也定在这里。一个单进程起步的桌面，WM 与「客户端」住在同一进程，ICCCM 与 EWMH 的线格式（atom、ClientMessage）没有意义，但它们整理出的语义清单是窗口件数据结构的一手设计参照。借语义，不搬线格式。
 
 ## 1. ICCCM：窗口管理语义的底册
 
@@ -86,7 +86,7 @@ FFM 有一个对账问题，同一本 i3 手册里就有现成证据：键盘焦
 
 键盘焦点与指针焦点是两件事，X 从根上就这么切：键盘焦点是全局单值（SetInputFocus，ICCCM 讨论的就是它的让渡），指针事件的去向由命中位置决定，两者可以分叉。ICCCM 的四模型是把键盘焦点让渡协议化，EWMH 的 USER_TIME 与来源标识是把「谁有权改焦点」分级。Wayland 侧同构：键盘焦点由合成器的 enter 与 leave 决定，指针命中独立分派（此句为协议常识，未附单一出处 URL）。
 
-取舍给 vesper 用一句话说清。FFM 省一次点击，代价是拖选、悬停菜单、滚轮都容易把焦点带到不想去的地方，并且要求焦点策略理解指针全轨迹。CTF 把焦点转移变成显式事件，与捕获语义（按下者持有）天然咬合。桌面环境主流取 CTF（此处为通识判断），平铺 WM 常默认 FFM（i3 手册为证）。
+取舍一句话说清。FFM 省一次点击，代价是拖选、悬停菜单、滚轮都容易把焦点带到不想去的地方，并且要求焦点策略理解指针全轨迹。CTF 把焦点转移变成显式事件，与捕获语义（按下者持有）天然咬合。桌面环境主流取 CTF（此处为通识判断），平铺 WM 常默认 FFM（i3 手册为证）。
 
 ## 4. 窗口操作语义表
 
@@ -121,7 +121,7 @@ transient 应保持在其宿主之上。同一层内才是用户 raise 与 lower
 
 Wayland 把三个角色合一。weston 手册页的原话是它「a display server, a window manager, and a compositor all in one」（经 construction-order.md §5 转引，原页 man.archlinux.org/man/weston.1.en）。客户端拿不到全局坐标，位置由合成器裁定（xdg-shell 明文），WM 与合成器不再需要 EWMH 这样的中介协议，桌面语义内化成合成器的实现细节。副作用是，本来 EWMH 一份文档管完的题目（层、装饰、选区）各自长成独立小协议，见下一节。
 
-结构差异的教学价值：X11 是 server、WM、合成器三角色三组约定的缝合体，Wayland 是单角色单实现。vesper 单进程起步的形状天然是 Wayland 形状：树序即 z 序，脏区条带重画即合成，没有跨进程协商。D5b 上真 Wayland 后端时宿主表三口不变，变的只是 vesper 作为一个客户端怎么把整张画布递出去。
+结构差异的教学价值：X11 是 server、WM、合成器三角色三组约定的缝合体，Wayland 是单角色单实现。单进程起步的自研桌面形状天然是 Wayland 形状：树序即 z 序，脏区条带重画即合成，没有跨进程协商。
 
 ## 6. Wayland 协议族五件
 
@@ -129,7 +129,7 @@ Wayland 把三个角色合一。weston 手册页的原话是它「a display serv
 
 现行第 7 版，属 wayland-protocols 的 stable 类目（版本特性沿革：v2 加 tiled 状态，v3 加 positioner 重定位，v4 加 configure_bounds，v5 加 wm_capabilities，v6 加 suspended，v7 加 constrained 边）。角色协议：wl_surface 经 xdg_wm_base 取得 toplevel（窗）或 popup（菜单与提示）角色，先 configure 后 ack 的握手驱动几何，客户端不设绝对位置。
 
-toplevel 给足窗口语义：configure 事件带状态集（maximized、fullscreen、resizing、activated、tiled_*、suspended），set_app_id 的取值约定是 .desktop 文件基名，这与 gap-analysis 1.10 里 App 注册表半取 desktop entry 字段语义的拍板正好对上。交互式移动缩放走 request_move 与 request_resize，要求响应真实用户事件（带 serial），合成器可拒绝。popup 用 positioner 定位，anchor 加 gravity，约束调整按 flip、slide、resize 的优先级（原文顺序）保证弹出物不越屏。grab 要求父必须是 toplevel 或正抓取的 popup，只有最顶 popup 可销毁，dismiss 时发 popup_done。子面必须与父面相交或至少相邻，菜单不得飘走。
+toplevel 给足窗口语义：configure 事件带状态集（maximized、fullscreen、resizing、activated、tiled_*、suspended），set_app_id 的取值约定是 .desktop 文件基名，桌面侧的应用注册表可以直接沿用这个约定。交互式移动缩放走 request_move 与 request_resize，要求响应真实用户事件（带 serial），合成器可拒绝。popup 用 positioner 定位，anchor 加 gravity，约束调整按 flip、slide、resize 的优先级（原文顺序）保证弹出物不越屏。grab 要求父必须是 toplevel 或正抓取的 popup，只有最顶 popup 可销毁，dismiss 时发 popup_done。子面必须与父面相交或至少相邻，菜单不得飘走。
 
 ### 6.2 layer-shell（wlr-layer-shell-unstable-v1）
 
@@ -137,17 +137,17 @@ toplevel 给足窗口语义：configure 事件带状态集（maximized、fullscr
 
 ### 6.3 primary-selection（unstable-v1）
 
-给 Wayland 补 X11 PRIMARY 的同构物：选即有，中键粘贴，目的原文是与 X server 的 primary selection 对应。所有权由合成器跟踪，数据留在源端，经管道 fd 传输，MIME 类型协商，set_selection 要带触发按下的 serial。已裁定的 D4 终端方案（拖选写 PRIMARY、中键粘贴，见本次调研背景的既有拍板）是同一条语义的 Wayland 版，desktop-infrastructure.md §6 的剪贴板裁定在这里得到协议级印证。
+给 Wayland 补 X11 PRIMARY 的同构物：选即有，中键粘贴，目的原文是与 X server 的 primary selection 对应。所有权由合成器跟踪，数据留在源端，经管道 fd 传输，MIME 类型协商，set_selection 要带触发按下的 serial。终端的祖传用法（拖选写 PRIMARY、中键粘贴，见 terminal-emulator-internals.md 第 4 节）在这里得到协议级印证。
 
 ### 6.4 xdg-decoration（unstable-v1）
 
-装饰归谁画的谈判协议。诞生背景是早期合成器政策分裂，有的坚持客户端自绘，有的要服务端画。客户端 set_mode 只是偏好，最终由 configure 事件裁定，客户端必须照办并避免谈判循环。支持面同样分裂：KWin 支持，Mutter 与 Weston 不支持。对 vesper 的参照价值在概念：装饰权是桌面壳的属性。vesper 的 WindowFrame 永远由桌面画，等于永远 server-side，设计文档里写死即可，不需要谈判协议。
+装饰归谁画的谈判协议。诞生背景是早期合成器政策分裂，有的坚持客户端自绘，有的要服务端画。客户端 set_mode 只是偏好，最终由 configure 事件裁定，客户端必须照办并避免谈判循环。支持面同样分裂：KWin 支持，Mutter 与 Weston 不支持。对自研桌面的参照价值在概念：装饰权是桌面壳的属性。桌面壳自己画窗框，等于永远 server-side，设计文档里写死即可，不需要谈判协议。
 
 ### 6.5 input-method（unstable-v2）
 
-合成器侧的输入法挂口：每 seat 至多一个输入法对象，activate 与 deactivate 切换，合成器把 surrounding text、content type、光标矩形递给输入法，输入法回 preedit、commit、删 surrounding。grab_keyboard 给输入法独占键盘，交付原始键码加 keymap，keysym 自己译，CJK 组词必需。它是 text-input 的另一半：应用到合成器走 text-input-v3，合成器到输入法走本协议，正好对应 desktop-infrastructure.md §7 所记 KWin 用 v1、wlroots 系用 v2 的分野，wayland.app 的支持矩阵（Sway、Labwc、river、niri、Hyprland、COSMIC 在，KWin、Mutter、Weston 不在 v2）与此互相印证。D5b 依赖清单里 text-input-v3 已在册，本协议是它的对端。
+合成器侧的输入法挂口：每 seat 至多一个输入法对象，activate 与 deactivate 切换，合成器把 surrounding text、content type、光标矩形递给输入法，输入法回 preedit、commit、删 surrounding。grab_keyboard 给输入法独占键盘，交付原始键码加 keymap，keysym 自己译，CJK 组词必需。它是 text-input 的另一半：应用到合成器走 text-input-v3，合成器到输入法走本协议，正好对应 desktop-infrastructure.md §7 所记 KWin 用 v1、wlroots 系用 v2 的分野，wayland.app 的支持矩阵（Sway、Labwc、river、niri、Hyprland、COSMIC 在，KWin、Mutter、Weston 不在 v2）与此互相印证。它是 text-input 的对端：应用到合成器走 text-input-v3，合成器到输入法走本协议。
 
-五件的公共形状值得记录：EWMH 一份文档里的窗口类型、层、struts、装饰四个题目，在 Wayland 各自变成独立小协议，谈判语义统一收敛为「客户端表达偏好，合成器 configure 裁定」。D6 的跨进程协议设计直接可抄这个形状。
+五件的公共形状值得记录：EWMH 一份文档里的窗口类型、层、struts、装饰四个题目，在 Wayland 各自变成独立小协议，谈判语义统一收敛为「客户端表达偏好，合成器 configure 裁定」。将来设计自己的跨进程协议时可以直接抄这个形状。
 
 ## 7. 会话层：显示管理器、logind 与 seat、恢复的最小形状
 
@@ -167,46 +167,33 @@ XSMP（X Session Management Protocol）是恢复的全量协议，跑在 ICE 上
 
 ICCCM 第 5 节给 WM 的定位值得单独看：WM 自己也是会话客户端（要注册拿自己的 client-ID），它要为每个带有效 SM_CLIENT_ID 的客户端窗口保存与恢复状态，并在 checkpoint 的 phase 2 做。窗口归属用 WM_CLIENT_LEADER（客户端的领导窗）加 WM_WINDOW_ROLE 区分同客户端的多个窗。老式的 WM_COMMAND 重启约定在 ICCCM 2.0 已挪进附录 C 标为 obsolete。
 
-对照与取舍。CDE 工作区的占用列表（窗口属于哪些工作区是一个可枚举属性，lightweight-and-classic-desktops.md §5.3 引 Oracle 文档）与 XSMP 代表恢复问题的两端：前者是 WM 自己就能存的廉价事实（几何、桌面占用、还原命令的快照），后者是任意客户端自愿参与的协议机器（双向消息、两相、interact、身份、认证）。恢复的最小形状取前者：一份快照加一次回放。单进程期快照就是窗口树加 App 注册表的序列化，D6 之后子程序在会话里的状态才需要「请子程序自存自报」，那时的参照是 XSMP 的 previous-ID 身份加自存属性，不需要 ICE 级的传输与谈判机器。
+对照与取舍。CDE 工作区的占用列表（窗口属于哪些工作区是一个可枚举属性，lightweight-and-classic-desktops.md §5.3 引 Oracle 文档）与 XSMP 代表恢复问题的两端：前者是 WM 自己就能存的廉价事实（几何、桌面占用、还原命令的快照），后者是任意客户端自愿参与的协议机器（双向消息、两相、interact、身份、认证）。恢复的最小形状取前者：一份快照加一次回放。单进程期快照就是窗口树加应用注册表的序列化，等子程序参与会话，状态才需要「请子程序自存自报」，那时的参照是 XSMP 的 previous-ID 身份加自存属性，不需要 ICE 级的传输与谈判机器。
 
-## 8. 对 vesper：必做、显式不做与两刀边界
+## 8. 对自研桌面的落地建议：必做与显式不做
 
-### 8.1 必做（单色单进程期就要立住的语义）
+### 8.1 必做（单进程期就要立住的语义）
 
-- 键盘焦点一个变量，click-to-focus，来源字段从第一天就有。理由：与 InputRouter 捕获语义咬合（按下者持有，焦点转移与事件捕获同源），拖选不抢焦点（终端 PRIMARY 裁定的前置），FFM 的指针全轨迹理解成本换不来收益。来源字段抄 EWMH source indication 的思想，单进程期只有「用户动作」一种来源，字段留着，D6 后「子程序请求」是第二种。
-- z 序即树序，抬升策略拍死。PointerDown 落在标题栏或客户区，抬升加取焦点一次完成，activation 的原子性照 EWMH 2.8 的组合动作清单验收：焦点、还原、搬桌面三件事要么全做要么不做。
+- 键盘焦点一个变量，click-to-focus，来源字段从第一天就有。理由：与事件捕获语义咬合（按下者持有，焦点转移与事件捕获同源），拖选不抢焦点，FFM 的指针全轨迹理解成本换不来收益。来源字段抄 EWMH source indication 的思想，单进程期只有「用户动作」一种来源，字段留着，将来「子程序请求」是第二种。
+- z 序即树序，抬升策略定死。指针按下落在标题栏或客户区，抬升加取焦点一次完成，activation 的原子性照 EWMH 2.8 的组合动作清单验收：焦点、还原、搬桌面三件事要么全做要么不做。
 - 窗口类型位图进 App 报名数据。tooltip、dropdown、菜单类永不取焦点，从第一天就是规则而非巧合。层序照 EWMH 9.10 摆好：桌面面最底，普通窗中层，任务栏与浮层在顶。
 - 状态与许可两张表分离。窗口对象存事实（maximized、iconic）与许可（可移动、可缩放、可关闭）各一套，任务栏读许可表决定亮什么。EWMH 把它们拆成两个原子的理由对单进程同样成立：事实会自己变，许可是政策。
-- 关闭两档。on_close 生命周期回调（请示档）与强制销毁（武力档）分开，D4 的 PTY 子进程收 SIGHUP 就是武力档的第一个真实消费者。_NET_WM_PING 的同构物记进 D6 口袋：子程序探活。
-- 尺寸提示进 WindowFrame。min 第一天就有（零尺寸窗口是崩溃不是边界），base 加 inc 等 resize 刀（gap-analysis 1.6 建议贴 D4）补齐，终端网格 80 列乘 cell 宽就是天然的 base 加 inc。固定尺寸窗口 min 等于 max 直接可用。
-- 最大化记忆几何与 workarea 概念。pre-maximize bounds 存两个字段，最大化目标对齐扣掉任务栏后的区域。任务栏刀（construction-order.md 修正一）与这条咬合：任务栏先立，workarea 才有内容。
+- 关闭两档。on_close 生命周期回调（请示档）与强制销毁（武力档）分开，PTY 子进程收 SIGHUP 就是武力档的第一个真实消费者。_NET_WM_PING 的同构物将来也要：子程序探活。
+- 尺寸提示进窗口件。min 第一天就有（零尺寸窗口是崩溃不是边界），base 加 inc 随缩放功能补齐，终端网格 80 列乘 cell 宽就是天然的 base 加 inc。固定尺寸窗口 min 等于 max 直接可用。
+- 最大化记忆几何与 workarea 概念。pre-maximize bounds 存两个字段，最大化目标对齐扣掉任务栏后的区域。任务栏先立，workarea 才有内容。
 
 ### 8.2 显式不做（写进文档的负面清单）
 
-- ICCCM 与 EWMH 的线格式。X11 后端上 vesper 自己只是一个普通全屏客户端（visor 的 X11WindowHost），不 reparent、不管别人的窗。两份规格降格为数据结构设计参照，教学叙事就写「协议折叠为函数调用」。
-- 多工作区。gap-analysis 1.11 已推迟，词汇表记两条：占用列表模型（0xFFFFFFFF 语义）与 STICKY 的真义（管 viewport 不管桌面）。
+- ICCCM 与 EWMH 的线格式。X11 后端上自研桌面自己只是一个普通全屏客户端，不 reparent、不管别人的窗。两份规格降格为数据结构设计参照，教学叙事就写「协议折叠为函数调用」。
+- 多工作区。起步可以推迟，词汇表记两条：占用列表模型（0xFFFFFFFF 语义）与 STICKY 的真义（管 viewport 不管桌面）。
 - focus-follows-mouse 与 sloppy。不做，但键盘焦点与指针命中在代码里保持两个独立事实（焦点变量与 hit_test 结果不共享），将来加 FFM 是策略件不是结构返工。layer-shell 的 keyboard interactivity 三档是「每层对键盘的态度」的现成抽象：浮层永远 none，桌面面 on_demand，普通窗独占。
-- 合成器分离。1bpp 无透明无变形，树序绘制就是全部合成。X11 三角色缝合的历史留给教学叙事，不进代码。
-- 会话管理器与图形登录。会话等价物是启动装配（desktop-infrastructure.md §2 拍板），登录推迟到 Cinux 侧 init 线程阶段。seat 与 VT 的知识记进 D5 口袋：initramfs 里 /init 拉桌面就是 seat0 上唯一的会话，evdev 节点在无 logind 的世界里就是直接读设备，概念上知道 uaccess 的形状（活动会话才有设备权）即可。
+- 合成器分离。单色无透明无变形，树序绘制就是全部合成。X11 三角色缝合的历史留给教学叙事，不进代码。
+- 会话管理器与图形登录。起步阶段会话等价物就是启动装配（见 desktop-infrastructure.md §2 的自启链），登录可以推迟。seat 与 VT 的知识值得记着：无 logind 的世界里 evdev 节点就是直接读设备，initramfs 里 /init 拉桌面就是 seat0 上唯一的会话，概念上知道 uaccess 的形状（活动会话才有设备权）即可。
 
-### 8.3 D1（WindowFrame 拖拽）刀面边界
+### 8.3 教学论据的投影
 
-- 抬升与取焦点的原子性落在这一刀，判例建议：拖动开始时断言窗口已置顶且已取焦点。
-- 最小尺寸钳制同刀带上，min 先取硬编码值（比如 2×2 字符网格），resize 刀再换成 App 报数。
-- 拖出画布的钳制策略规格无条文（本文拉取的 ICCCM 与 EWMH 章节均未规定），自己拍死：标题栏保持至少部分可达，写进判例与 CLAUDE.md。
-- 拖拽期间的事件归属用 InputRouter 捕获语义（已有），新旧两框报脏（交接文档 D1 已定），这两条不动。
+窗口管理全在用户态约定里，ICCCM 加 EWMH 两份文档就是证据本体：X server 只出了重定向与叠放原语，内核什么都没出。单进程桌面把协议折叠成函数调用，是这条论据走到极致的形状。反方向，会话层的底座（PAM、udev、VT、cgroup）全是操作系统件。「GUI 离操作系统很远」与「桌面的登录底座离操作系统很近」是同一枚硬币的两面：在 X11 宿主里调试时看不见 seat，落到裸 fbdev 时就踩在 seat0 的 VT 上，自己当 init 时整条登录链都是自己的代码。
 
-### 8.4 D2（桌面图标）刀面边界
-
-- 桌面面不是窗口。它是容器层最底部的兄弟，等价 EWMH 的 WINDOW_TYPE_DESKTOP 加 9.2 判例：一个 desktop 型全屏面「使桌面可聚焦并极大简化实现」，比管理一堆小形状窗快。vesper 里它不进 WindowFrame 序列、不参与 z 序操作、不可最小化。
-- 单击选中不等于激活。选中态是视觉事实，不夺键盘焦点（desktop 层键盘态度 on_demand）。双击才是激活，激活等于开窗加抬升加取焦点的组合，判例写纯逻辑案（双击开窗，交接文档 D2 已定）。
-- 图标不是窗口的另一层含义：D6b 图标拉起子程序时，图标数据来自 App 注册表（desktop entry 字段语义），与窗口管理无关。
-
-### 8.5 教学论据的投影
-
-窗口管理全在用户态约定里，ICCCM 加 EWMH 两份文档就是证据本体：X server 只出了重定向与叠放原语，内核什么都没出。vesper 单进程把协议折叠成函数调用，是这条论据走到极致的形状。反方向，会话层的底座（PAM、udev、VT、cgroup）全是操作系统件。「GUI 离操作系统很远」与「桌面的登录底座离操作系统很近」是同一枚硬币的两面，正好支撑三梯队叙事：X11 梯队看不见 seat，fbdev 梯队踩在 seat0 的 VT 上，Cinux 梯队自己就是 init。
-
-## 9. 对 vesper 的启示
+## 9. 启示
 
 - 窗口类型位图进 App 报名数据，浮层类永不取焦点写成语义规则。（概念参考 EWMH 的 WINDOW_TYPE 类型学）
 - 状态与许可两张表分家，任务栏按许可表渲染操作。（概念参考 EWMH 的 state 与 allowed actions 分离）
@@ -217,7 +204,7 @@ ICCCM 第 5 节给 WM 的定位值得单独看：WM 自己也是会话客户端�
 - 最大化的目标区域是 workarea 不是整屏，任务栏占条之后 workarea 才有定义。（概念参考 EWMH 的 struts 与 workarea）
 - 子程序自绘把手、桌面执行移动缩放，交互统一样式，竞态给 ESC 终止。（概念参考 EWMH 的 _NET_WM_MOVERESIZE 与 xdg-shell 的 request_move）
 - 会话恢复先做快照回放，子程序参与时用身份加自存自报。（概念参考 XSMP 的 previous-ID 会话身份）
-- D6 协议的谈判形状统一取「客户端表达偏好、桌面裁定」，configure 而非 command。（概念参考 xdg-shell 的 configure 握手）
+- 跨进程协议的谈判形状统一取「客户端表达偏好、桌面裁定」，configure 而非 command。（概念参考 xdg-shell 的 configure 握手）
 
 ## 10. 参考来源
 
@@ -243,9 +230,7 @@ ICCCM 第 5 节给 WM 的定位值得单独看：WM 自己也是会话客户端�
 
 本地材料：
 
-- 本仓 pack-26-desktop-handover.md（2026-10-20 起瘦身并入 documents/desktop-roadmap.md；D1 至 D6 刀面、宿主表现状、D5b Wayland 边界。支撑第 0、8 节）
 - documents/research/lightweight-and-classic-desktops.md （CDE 工作区占用列表、Windows 95 任务栏与 Alt+Tab 的 Z 序论据。支撑第 2.3、5、7.3 节）
-- documents/research/vesper-gap-analysis.md （1.3 焦点域、1.5 Z 序、1.6 resize、1.10 注册表、1.11 工作区、1.12 会话的既有拍板。支撑第 6.1、8 节）
-- documents/research/desktop-infrastructure.md （第 2 节会话拍板、第 6 节剪贴板裁定、第 7 节输入法两段链。支撑第 6.3、6.5、8.2 节）
-- documents/research/construction-order.md （weston 三合一转引、修正一任务栏刀。支撑第 5、8.1 节）
+- documents/research/desktop-infrastructure.md （第 2 节自启链、第 6 节剪贴板取舍、第 7 节输入法两段链。支撑第 6.3、6.5、8.2 节）
+- documents/research/construction-order.md （weston 三合一转引。支撑第 5 节）
 - documents/research/terminal-emulator-internals.md （resize 的 TIOCSWINSZ 与 SIGWINCH 链路。支撑第 4 节）

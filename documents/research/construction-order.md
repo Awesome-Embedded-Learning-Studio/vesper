@@ -1,10 +1,10 @@
 # 桌面环境建设顺序考证：KDE、GNOME、Xfce 与窗口管理本体项目的起家史
 
-> 调研日期 2026-10-17 · 服务对象：vesper 手搓教学桌面 · 来源：网络检索加本地材料
+> 调研日期 2026-10-17 · 背景：手搓教学桌面项目的立项调研 · 来源：网络检索加本地材料
 
 ## 1. 研究问题与材料口径
 
-本文回答一组具体问题：KDE、GNOME、Xfce 各自最早长出来的是库还是 App，窗口管理器什么时候进场，从小项目长成完整桌面的路径长什么样。旁证取 weston、i3、sway 三个窗口管理本体项目，看它们与「桌面环境」类项目的顺序差别。最后提炼从零起家的通用先后律，对照 vesper 交接文档 §6 的 D0 到 D6 刀序。
+本文回答一组具体问题：KDE、GNOME、Xfce 各自最早长出来的是库还是 App，窗口管理器什么时候进场，从小项目长成完整桌面的路径长什么样。旁证取 weston、i3、sway 三个窗口管理本体项目，看它们与「桌面环境」类项目的顺序差别。最后提炼从零起家的通用先后律，并给今天从零起步的项目三条提示。
 
 材料以一手为主：Matthias Ettrich 1996 年的 KDE 原始公告、Miguel de Icaza 1997 年的 GNOME 原始公告、Olivier Fourdan 2000 年的 USENIX 论文、《20 Years of KDE》书、i3 官方下载页与 4.0 发布说明、Drew DeVault 的 sway 1.0 与 wlroots 文章、weston 手册页。二手转述仅在无法取得一手时使用，均在参考来源里注明。日期与版本号一律按来源原样记录，推断处标明是我倒推的。
 
@@ -67,7 +67,7 @@ Xfce 路径的要点。种子是一根任务栏，不是 WM、不是库、也不
 
 桌面环境类项目先有壳件后补核心，窗口管理本体项目恰好相反，核心最先、桌面性最后。
 
-weston 是 Wayland 项目的参考合成器（NVIDIA 文档称其为 Wayland 项目的组成部分、参考实现）。手册页对其结构的描述与 vesper 的宿主表思路同构：合成器本体是「a display server, a window manager, and a compositor all in one」，显示后端（drm、wayland、x11、rdp、headless）全部是可装载模块，而「桌面性」被压进 shell 插件层——「Weston's user interface is implemented by individual 'shell' plugins」，默认 desktop shell 提供「a panel with launchers and a clock, a background, and an interactive task switcher」，且手册特意声明它「not intended to be a full-fledged desktop environment in and of itself」。也就是说 weston 先把协议核心与后端做扎实，面板与启动器只是示范插件。来源：Arch Linux 的 weston(1) 手册页、Collabora 的 Weston 12 发布文（libweston 与可执行文件的分层）。
+weston 是 Wayland 项目的参考合成器（NVIDIA 文档称其为 Wayland 项目的组成部分、参考实现）。手册页对其结构的描述值得整个借走：合成器本体是「a display server, a window manager, and a compositor all in one」，显示后端（drm、wayland、x11、rdp、headless）全部是可装载模块，而「桌面性」被压进 shell 插件层——「Weston's user interface is implemented by individual 'shell' plugins」，默认 desktop shell 提供「a panel with launchers and a clock, a background, and an interactive task switcher」，且手册特意声明它「not intended to be a full-fledged desktop environment in and of itself」。也就是说 weston 先把协议核心与后端做扎实，面板与启动器只是示范插件。来源：Arch Linux 的 weston(1) 手册页、Collabora 的 Weston 12 发布文（libweston 与可执行文件的分层）。
 
 i3 是纯 WM 项目。首个版本 3.α 于 2009-03-15 发布（i3 官方下载页年表），整个项目从零用 C 写成、基于 libxcb，动机是 wmii 缺它想要的多显示器等特性（Debian 手册页语）。它头两年只有一条内置的工作区条，到 4.0（2011-07-31）才把状态条独立成 i3bar，发布说明原话「The internal workspace bar is obsolete. Use i3bar instead.」。核心稳定两年后，生态件才开始分家。
 
@@ -93,47 +93,33 @@ sway 是 i3 兼容的 Wayland 合成器。Wikipedia 记录首发 2016-03-24，�
 
 律八，生态件永远在核心稳定之后。i3bar 在 i3 诞生两年后（2011，4.0）才从内置条独立。sway 的锁屏、截屏、通知生态聚在 1.0（2019）前后。KDE 公告把 Hypertext Help System 排在中段，实际帮助系统成熟很晚。Xfce 的桌面图标 2007 年（4.4）才来。凡是「有了更好、没有也能用」的件，全部后置。
 
-## 7. 对照 vesper 的 D0 到 D6 刀序
+## 7. 对从零起步项目的三条提示
 
-先交代对照表，再给印证与修正。
+把八条律放到一个今天从零起步的桌面项目上，有三条直接可用。
 
-| vesper 刀次 | 内容 | 历史先例对照 | 判定 |
-|---|---|---|---|
-| D0 | 仓骨架，visor 借壳接入 | 律一： 库先于桌面。GTK 先于 GNOME、Qt 决策先于 KDE App | 印证 |
-| D1 | WindowFrame 加拖拽（X11） | 律二反方向（环境类先例第一件是面板），但律三表明 WM 早晚要自己接手，kwm 提前进场是同一教训 | 顺序特殊，理由成立 |
-| D2 | Desktop 容器、图标、双击 | 图标属律八生态件（Xfce 4.4 才有桌面图标）。面板缺位，见修正一 | 图标偏早，面板缺位 |
-| D3 | Terminal 控件加假源 | 律五： 终端在第一批，先跑回显再接真源 | 印证 |
-| D4 | 真 bash 走 PTY | KDE 的 xterm 套壳配方同款，且分两步走比先例更稳 | 印证 |
-| D5、D5b | fbdev 宿主、Wayland 后端 | weston 后端皆可装载模块，宿主表同构 | 印证 |
-| D6a、D6b | 最小子程序、任意程序拉起 | 律七与 GNOME 的 Bonobo 教训： 进程与组件边界后立，但语义先行 | 印证，边界接口从 D0 存在的做法与 Bonobo 延期形成正反对照 |
+第一，面板（任务栏）值得早立一个极简版。三大桌面环境的第一件桌面件家家是面板：KDE 的 kpanel 是作者亲自开工的第一件，Xfce 的第一版只有一根任务栏，GNOME 1.0 的门面是 panel。第一版面板可以小到只是一根只读窗口列表条，不做交互、不做 applet，i3 的内置工作区条先行两年、后来才独立成 i3bar 就是同款先例。它同时也是窗口件语义的第一块试金石：窗口增减、焦点变化这些语义有没有长对，面板一眼看得出来。
 
-印证的部分说三件事。其一，终端作为第一个 App 有最强的先例支撑，KDE 公告清单、GNOME 1.0、Xfce 的 xfterm 脚本都把终端放在第一批，D3 假源起步再加 D4 接真 bash 的两步切法，恰好把 KDE「xterm 套壳」一步拆得更稳。其二，visor 先在、桌面后开，与 GTK 先于 GNOME 完全同构，D0 的借壳接入符合律一。其三，D6 才立真进程边界，而「窗口递像素、桌面递事件」的进程内接口从 D0 就有，这个形状正是 GNOME 组件模型（立项许诺、Bonobo 迟到）教训的正面答案——语义先立，机制后换，换的时候桌面结构不用推倒。
+第二，配置读写库是基础设施，不是功能件，该在产生用户状态的件之前进仓。KConfig 是 KDE 第一批库类、格式仿 win.ini，早于几乎所有 App。桌面从图标摆位起就会产生用户状态（图标位置、窗口默认大小、终端字号），哪怕只是一个手写 ini 的读写器，也该在图标之前存在，免得各件各造存储格式。设置 GUI 完全不用急，律六说它天然晚到，Xfce 晚了十二年。
 
-建议修正的部分有三条。
+第三，生态件全部后置。帮助系统、桌面图标、托盘、通知这些「有了更好、没有也能用」的东西，历史先例里全部晚到（Xfce 的桌面图标距立项十一年），没有理由让它们先进。
 
-修正一，面板（任务栏）应当提前立一个极简版。三大桌面环境的第一件桌面件家家是面板：KDE 的 kpanel 是作者亲自开工的第一件，Xfce 的第一版只有一根任务栏，GNOME 1.0 的门面是 panel。vesper 的 D1 到 D6 没有任何一刀给面板，交接文档 §1 的终局形态里却有任务栏。建议在 D2 与 D4 之间加一刀「只读窗口列表条」，不做交互、不做 applet，只把当前窗口树摆上屏。i3 的先例（内置最简工作区条先行，两年后才独立成 i3bar）说明第一版面板可以小到只是一根条。它同时是 D1 窗口件的第一块试金石：窗口增减、焦点变化这些语义有没有长对，面板一眼看得出来。
+还有一条关于顺序本身的。若项目的环境约束使窗口件必须先行（单进程、无可借的 WM、没有可寄居的模块协议），那走的是 WM 本体类项目的路径，与桌面环境类的面板先行相反，这是环境决定的合理选择。kwm 的故事给它的注脚是：别指望窗口件能最后做，面板语义会逼它提前进场。
 
-修正二，配置持久化应当在 D0 至 D1 就有极简形态。KConfig 是 KDE 第一批库类、格式仿 win.ini，说明配置读写库是基础设施，不是功能件。vesper 现在的刀序里没有配置件，而桌面从 D2 图标摆位起就会产生用户状态（图标位置、窗口默认大小、终端字号）。哪怕只是一个手写 ini 的读写器，也该在图标之前进仓，免得 D2 之后各刀各造存储格式。设置 GUI 完全不用急，律六说它天然晚到，Xfce 晚了十二年。
+## 启示
 
-修正三，图标早于面板在先例中没有对应（Xfce 4.4 桌面图标晚于面板十年），但它服务 vesper 的「程序启动器」叙事且判例便宜，可以保留现刀序，只要接受它比历史先例激进这一事实，并且把双击手势按交接文档 §8 的倾向回 visor 上游提案，与「手势是五事件之上的将来层」的既有拍板对齐。
-
-另外一条不算修正的观察。D1 把窗口件放在最前，与桌面环境类先例（面板先行）相反，与 WM 本体类项目（i3、sway、weston 核心先行）相同。vesper 单进程、零第三方依赖、无可借的 WM，X11 宿主下也没有 fvwm 模块协议可寄居，走 WM 本体路径是环境约束下的合理选择。kwm 的故事给它的注脚是：别指望窗口件能最后做，面板语义会逼它提前。
-
-## 对 vesper 的启示
-
-- 概念参考 KDE 的 FvwmModule 起步法。第一版桌面件寄居在现成基础设施上，等语义长大再自立。vesper 的 D1 在 X11 宿主里长 WindowFrame，同为「先寄生、后自立」的形状。
-- 概念参考 KDE 的 xterm 套壳终端配方。D3 假源回显加 D4 真 bash 走 PTY，就是这条配方拆成两刀的版本。
+- 概念参考 KDE 的 FvwmModule 起步法。第一版桌面件寄居在现成基础设施上，等语义长大再自立，「先寄生、后自立」。
+- 概念参考 KDE 的 xterm 套壳终端配方。先假源回显、再真 bash 走 PTY，就是这条配方拆成两步的版本。
 - 概念参考 weston 的 shell 插件分层。桌面壳（面板、背景、任务切换）压在合成核心之上做层，桌面性后置，核心先稳。
-- 概念参考 weston 的可装载后端。drm、wayland、x11、headless 皆为模块，与宿主表三梯队（X11、fbdev、Cinux）同构，D5b 增员走同一形状。
-- 概念参考 KDE 的 KConfig。极简配置读写库进第一批库件，格式可以土到 ini，但要先于产生用户状态的刀次存在。
-- 概念参考 GNOME 的 Bonobo 教训。组件与进程边界的协议许诺得早、实现得晚，vesper 从 D0 留进程内接口、D6 才换真进程，是这个教训的正面用法。
+- 概念参考 weston 的可装载后端。drm、wayland、x11、headless 皆为模块，显示后端做成可替换件，新增后端走同一形状。
+- 概念参考 KDE 的 KConfig。极简配置读写库进第一批库件，格式可以土到 ini，但要先于产生用户状态的件存在。
+- 概念参考 GNOME 的 Bonobo 教训。组件与进程边界的协议许诺得早、实现得晚，进程内接口先留、真进程后换，是这个教训的正面用法。
 - 概念参考 i3 的内置工作区条。面板第一版可以小到一条只读窗口列表，两年后再分家也不迟。
 - 概念参考 Xfce 的任务栏种子。桌面可以从一根任务栏长成完整环境，种子的「小」不是风险，「缺」才是。
 
 ## 参考来源
 
 - https://kde.org/announcements/announcement — Ettrich 1996-10-14 原始公告全文。支撑第 2 节（Panel 定位、项目清单顺序、FvwmModule 路线、WM 「may come very last」、xterm 套壳终端）与第 6 节律二、律五。
-- https://20years.kde.org/book/20yearsofKDE.pdf —《20 Years of KDE》。支撑第 2 节（Faure 的 kwm、kpanel、KConfig 回忆，Moore 的 kwm、kfm、kpanel 回忆，Gräßlin 的 KWin 1999 动工与 Ettrich 本不想写 WM）与第 6 节律三、律七、第 7 节 D1 对照。
+- https://20years.kde.org/book/20yearsofKDE.pdf —《20 Years of KDE》。支撑第 2 节（Faure 的 kwm、kpanel、KConfig 回忆，Moore 的 kwm、kfm、kpanel 回忆，Gräßlin 的 KWin 1999 动工与 Ettrich 本不想写 WM）与第 6 节律三、律七。
 - https://en.wikipedia.org/wiki/K_Desktop_Environment_1 — KDE Beta 1（1997-10-20）、KDE 1.0（1998-07-12）、1.1（1999-03-04）、kfm 与 kpanel 与 kwm 的对应关系。支撑第 2 节。
 - https://en.wikipedia.org/wiki/KDE — KDE 2.0 发布日 2000-10-23。支撑第 2 节、第 6 节律七。
 - https://lists.debian.org/debian-user/1997/08/msg02286.html — de Icaza 1997-08-28 转发的 GNOME 原始公告。支撑第 3 节（GTK 出自 GIMP、公告不提 WM、复用 KDE 代码、给 GNU 工具套前端）。
@@ -143,7 +129,7 @@ sway 是 i3 兼容的 Wayland 合成器。Wikipedia 记录首发 2016-03-24，�
 - https://upload.wikimedia.org/wikipedia/commons/...（GNOME 1.0 截图文件名含 Panel 1 与 File Manager）与 http://www.linux.co.cr/（1999-02-25 GNOME 文件管理器新版本时间线）— gmc 在场的旁证。支撑第 3 节。
 - https://en.wikipedia.org/wiki/Xfce — Xfce 全版本时间线（1996 立项、第一版只有任务栏、1998 Xfce 2 带 xfwm、1999-03 GTK 重写、4.0 2003-09-25、4.4 2007-01 Thunar 与桌面图标、4.6 2009-02 设置管理器）。支撑第 4 节、第 6 节律四律六律八。
 - https://www.usenix.org/publications/library/proceedings/als00/2000papers/papers/full_papers/fourdan/fourdan.pdf — Fourdan 的 USENIX 2000 论文。支撑第 4 节（1997 初开工、首件是工具栏、接 fvwm 模块、xfwm 改自 fvwm、2000 年全家福清单）。
-- https://man.archlinux.org/man/weston.1.en — weston(1) 手册。支撑第 5 节（合成器三合一、shell 插件、desktop shell 构成、后端模块清单）与第 7 节 D5 对照。
+- https://man.archlinux.org/man/weston.1.en — weston(1) 手册。支撑第 5 节（合成器三合一、shell 插件、desktop shell 构成、后端模块清单）
 - https://www.collabora.com/news-and-blog/news-and-events/weston-12-highlights-and-changes.html — libweston 分层。支撑第 5 节。
 - https://docs.nvidia.com/jetson/archives/r36.4/DeveloperGuide/SD/WindowingSystems/WestonWayland.html — weston 为 Wayland 项目参考实现。支撑第 5 节。
 - https://i3wm.org/downloads/ — i3 官方发布年表（3.α 2009-03-15、4.0 2011-07-31 等）。支撑第 5 节、第 6 节律八。

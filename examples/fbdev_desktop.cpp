@@ -363,7 +363,7 @@ int main(int argc, const char* const* argv) {
     // machine's console run. TERM=vt100 gives clear its escape words (a
     // dumb terminal has no clear to send), PS1 is a plain "> " the font can
     // draw.
-    constexpr std::array<const char*, 2> sh_args{"sh", "-i"};
+    constexpr std::array<const char*, 2> sh_args{"sh", "-il"};
     constexpr std::array<const char*, 2> sh_env{"TERM=vt100", "PS1=> "};
     auto sh_session = vesper::host::PtySession::open("/bin/sh", sh_args, sh_env);
     if (!sh_session.has_value()) {

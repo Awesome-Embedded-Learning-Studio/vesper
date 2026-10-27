@@ -1,6 +1,6 @@
 # KDE Plasma 架构全景:分层、进程与演化
 
-> 调研日期 2026-10-17 · 服务对象:vesper 手搓教学桌面 · 来源:网络检索加本地材料
+> 调研日期 2026-10-17 · 背景:手搓教学桌面项目的立项调研 · 来源:网络检索加本地材料
 
 ## 1. 总览:一套自底向上的四层栈
 
@@ -17,7 +17,7 @@ KDE Plasma 不是单一程序。[Arch Wiki](https://wiki.archlinux.org/title/KDE
 
 壳这一层自己又分成两个仓:plasma-workspace 装跨形态的通用件(会话管理、shell 本体、KRunner),plasma-desktop 装 PC 桌面特有的部分,官方仓库自述"desktop-specific parts of Plasma",而 Workspace 代码在 Desktop、Mobile 等形态间共用([GitHub plasma-desktop](https://github.com/KDE/plasma-desktop)、[Arch 包文件清单](https://archlinux.org/packages/extra/x86_64/plasma-workspace/files))。
 
-对 vesper 而言,这张图先给一个定位参照:vesper 的 visor 约等于 Qt 那格(控件加渲染管线),vesper 本仓约等于 Workspace 那格,App 口之下的程序约等于 Applications 那格。Frameworks 那格 vesper 刻意空着,理由见 §6。
+对自研桌面而言,这张图先给一个定位参照:自家的控件库约等于 Qt 那格(控件加渲染管线),桌面本体仓约等于 Workspace 那格,App 口之下的程序约等于 Applications 那格。Frameworks 那格小项目可以刻意空着,理由见 §6。
 
 ## 2. KDE Frameworks:单体 kdelibs 的拆解
 
@@ -145,14 +145,14 @@ Wayland 迁移是第三种形态:进程边界不动(KWin 还是 KWin),内部整�
 
 第一,重写可以,一次性切默认值不行。Plasma 6 同样是 Qt 大版本加显示协议切换,策略是新旧栈并行安装、发行版先行灰度、默认值最后才动,没有重演 4.0 的舆情。第二,库与壳分层、库按依赖分 tier,是单体长大后唯一可持续的形状。第三,稳定的跨进程协议比任何内部 API 都长寿,KWin 靠 X11 与 Wayland 协议活过了三次内部重写。第四,进程边界即容错边界,plasmashell 崩了桌面还在,这个隔离是 Plasma 用十几年稳定性换来的共识。
 
-## 6. 对 vesper 的启示
+## 6. 启示
 
-- 概念参考 KDE Plasma 的 Containment 容器。桌面与面板是同一种容器,差别只在摆放策略,Panel 自己也是 Applet。vesper 的 D2 Desktop 容器与将来的任务栏可以统一为一种容器抽象,容器嵌容器也正好回答 `Widget::kMaxChildren = 8` 的容量问题:桌面之下摆图标栏分组,而不是一张无限扁表。
-- 概念参考 KDE 的 DataEngine 数据源。数据引擎与展示分离,一个时间引擎喂两个时钟。vesper 终端从 D3 的回环假源到 D4 的 PTY 源,走的就是这条线的微缩版,App 面对的应是窄数据源接口,实现随便换,与交接文档"递数据不共享状态"的拍板同构。
-- 概念参考 KWin 的装饰桥。装饰是可替换插件,客户区像素从不归装饰管。vesper 的 D1 WindowFrame 从第一天就把标题栏当独立装饰对象建模:装饰与内容各报各的脏区,互不画进对方地盘,将来改标题栏样式不动内容渲染。
-- 概念参考 KDE 的 appletsrc 序列化。整棵容器树一个 INI 文件,applet 各存各段,组路径即树路径。vesper 桌面布局(图标位置、窗口摆位)落成文件的形状可以照这个思路:布局即数据,一个文件装下,新增 applet 类型不改文件格式。
-- 概念参考 KWin 脚本的 workspace/options 双入口。把窗口管理器的全部能力收敛成一个操作面加一个只读配置面,是脚本化的全部前提。vesper 若在教学上想暴露窗口管理能力,先把这个接口形状收敛好,单进程期它是 C++ 接口,D6 后同一形状换 IPC,顺序与 handover 文档从 D0 起立进程内边界的拍板一致。
-- KDE 的规模才需要的,vesper 明确不抄:80 库的 tier 分层、KI18n、Solid 硬件抽象、KParts 嵌入、主题引擎与特效体系、语义桌面。Mono1 单色渲染下主题抽象没有对象,圆角画法 visor 已有。另有一条反面参照:Nepomuk 这类超前的支柱投入,下场是被 Baloo 接替并在下个大版本弃掉,教学仓更要按当期需要长件。
+- 概念参考 KDE Plasma 的 Containment 容器。桌面与面板是同一种容器,差别只在摆放策略,Panel 自己也是 Applet。桌面容器与任务栏可以统一为一种容器抽象,容器嵌容器也让大桌面不必是一张无限扁表:桌面之下摆图标栏分组即可。
+- 概念参考 KDE 的 DataEngine 数据源。数据引擎与展示分离,一个时间引擎喂两个时钟。终端从回环假源到真 PTY 源,走的就是这条线的微缩版,App 面对的应是窄数据源接口,实现随便换。
+- 概念参考 KWin 的装饰桥。装饰是可替换插件,客户区像素从不归装饰管。窗口件从第一天就把标题栏当独立装饰对象建模:装饰与内容各报各的脏区,互不画进对方地盘,将来改标题栏样式不动内容渲染。
+- 概念参考 KDE 的 appletsrc 序列化。整棵容器树一个 INI 文件,applet 各存各段,组路径即树路径。桌面布局(图标位置、窗口摆位)落成文件可以照这个思路:布局即数据,一个文件装下,新增件类型不改文件格式。
+- 概念参考 KWin 脚本的 workspace/options 双入口。把窗口管理器的全部能力收敛成一个操作面加一个只读配置面,是脚本化的全部前提。想暴露窗口管理能力,先把这个接口形状收敛好:单进程期它是 C++ 接口,将来分进程时同一形状换 IPC,接口先立、机制后换。
+- KDE 的规模才需要的东西,小项目明确不抄:80 库的 tier 分层、KI18n、Solid 硬件抽象、KParts 嵌入、主题引擎与特效体系、语义桌面。单色渲染下主题抽象没有对象。另有一条反面参照:Nepomuk 这类超前的支柱投入,下场是被 Baloo 接替并在下个大版本弃掉,教学项目更要按当期需要长件。
 
 ## 7. 参考来源
 
