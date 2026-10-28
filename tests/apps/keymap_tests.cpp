@@ -2,6 +2,7 @@
 #include "host/keymap.hpp"
 
 #include <cstdint>
+#include <initializer_list>
 
 #include "testing.hpp"
 #include "visor/base/geometry/point.hpp"
@@ -49,13 +50,21 @@ void keypad_digits_fold() {
 
 void named_and_unknown_keys_pass_through() {
     // The core's named evdev values survive the fold untouched, the arrows'
-    // out-of-band codes included, and a key no table knows keeps its number.
+    // out-of-band codes included. Opaque keys must not collide with text.
     VESPER_CHECK_EQ(vesper::host::text_code_for(14, false), std::uint32_t{14});
     VESPER_CHECK_EQ(vesper::host::text_code_for(15, false), std::uint32_t{15});
     VESPER_CHECK_EQ(vesper::host::text_code_for(28, false), std::uint32_t{28});
     VESPER_CHECK_EQ(vesper::host::text_code_for(57, false), std::uint32_t{57});
     VESPER_CHECK_EQ(vesper::host::text_code_for(0x110, false), std::uint32_t{0x110});
-    VESPER_CHECK_EQ(vesper::host::text_code_for(59, false), std::uint32_t{59});
+    VESPER_CHECK_EQ(vesper::host::text_code_for(59, false), std::uint32_t{0x1003b});
+}
+
+void modifiers_do_not_type_printable_bytes() {
+    for (const std::uint16_t code : {42, 54, 56, 58, 69, 70, 97, 100, 125, 126}) {
+        VESPER_CHECK(vesper::host::text_code_for(code, true) > 126);
+    }
+    VESPER_CHECK_EQ(vesper::host::text_code_for(5, true), std::uint32_t{'$'});
+    VESPER_CHECK_EQ(vesper::host::text_code_for(53, true), std::uint32_t{'?'});
 }
 
 void fold_text_rewrites_key_events_only() {
@@ -117,6 +126,7 @@ void run_keymap_tests() {
     digits_and_punctuation_fold();
     keypad_digits_fold();
     named_and_unknown_keys_pass_through();
+    modifiers_do_not_type_printable_bytes();
     fold_text_rewrites_key_events_only();
     inverse_walk_returns_the_wire_numbers();
 }

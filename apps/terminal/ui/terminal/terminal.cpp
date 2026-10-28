@@ -6,10 +6,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <variant>
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
 #include "visor/base/geometry/size.hpp"
+#include "visor/bindings/events.hpp"
 #include "visor/bindings/events/key_words.hpp"
 #include "visor/bindings/events/modifiers.hpp"
 #include "visor/canvas/color.hpp"
@@ -55,6 +57,9 @@ namespace {
         case visor::host::kKeyEnter:
             out = '\n';
             return true;
+        case visor::host::kKeyTab:
+            out = '\t';
+            return true;
         case visor::host::kCharSpace:
         case visor::host::kKeySpace:
             out = ' ';
@@ -88,6 +93,19 @@ Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font) noexcept
 
 void Terminal::set_source(TerminalSource* source) noexcept {
     source_ = source;
+}
+
+bool Terminal::capture_event(const visor::host::Event& event) noexcept {
+    if (!focused()) {
+        return false;
+    }
+    if (const auto* down = std::get_if<visor::host::KeyDown>(&event);
+        down != nullptr && down->code == visor::host::kKeyTab) {
+        on_key_down(down->code, down->modifiers);
+        return true;
+    }
+    const auto* up = std::get_if<visor::host::KeyUp>(&event);
+    return up != nullptr && up->code == visor::host::kKeyTab;
 }
 
 std::size_t Terminal::cell_index(int col, int row) const noexcept {

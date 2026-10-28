@@ -79,8 +79,8 @@ void held_shift_folds_into_the_event() {
     const auto shift_word = need(translator.feed(kEvKey, kKeyLeftShift, 1));
     const KeyDown* const shift_down = std::get_if<KeyDown>(&shift_word);
     VESPER_CHECK(shift_down != nullptr);
-    // The modifier key itself keeps its evdev number; no table entry types.
-    VESPER_CHECK_EQ(shift_down->code, std::uint32_t{kKeyLeftShift});
+    // The modifier event stays outside the printable text range.
+    VESPER_CHECK_EQ(shift_down->code, std::uint32_t{0x10000U + kKeyLeftShift});
     VESPER_CHECK(shift_down->modifiers.shift);
 
     const auto typed = need(translator.feed(kEvKey, kKeyA, 1));

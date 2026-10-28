@@ -79,8 +79,13 @@ std::uint32_t text_code_for(std::uint16_t code, bool shift) noexcept {
     if (found == '\0') {
         scan(kKeypadRuns);
     }
-    return found != '\0' ? static_cast<std::uint32_t>(static_cast<unsigned char>(found))
-                         : static_cast<std::uint32_t>(code);
+    if (found != '\0') {
+        return static_cast<std::uint32_t>(static_cast<unsigned char>(found));
+    }
+    if (code >= 32 && code <= 126 && code != visor::host::kKeySpace) {
+        return 0x10000U + code;
+    }
+    return code;
 }
 
 visor::host::Event fold_text(visor::host::Event event) noexcept {

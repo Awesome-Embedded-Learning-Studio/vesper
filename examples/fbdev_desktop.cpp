@@ -205,6 +205,7 @@ struct FbdevSession {
     vesper::host::EvdevInput pointer;
     vesper::host::FbdevDevice fb;
     SoftwarePointer cursor;
+    Terminal* terminal = nullptr;
     Frame* frame = nullptr;
     bool trace = false;
     unsigned long loops = 0;
@@ -252,14 +253,17 @@ bool fbdev_poll_event(void* context, visor::host::Event& out) noexcept {
     auto* const session = static_cast<FbdevSession*>(context);
     // The keyboard goes first: typing takes the round when both devices
     // have something to say, and the pointer's words wait in their node.
-    const bool found = session->keyboard.poll_next(out) || session->pointer.poll_next(out);
-    if (found) {
+    while (session->keyboard.poll_next(out) || session->pointer.poll_next(out)) {
         if (const auto* move = std::get_if<visor::host::PointerMove>(&out)) {
             session->cursor.move(move->pos);
         }
         trace_event(*session, out);
+        if (session->terminal != nullptr && session->terminal->capture_event(out)) {
+            continue;
+        }
+        return true;
     }
-    return found;
+    return false;
 }
 
 std::uint64_t fbdev_clock_ms(void* /*context*/) noexcept {
@@ -358,6 +362,7 @@ int main(int argc, const char* const* argv) {
     WindowFrame term_win{RectI{.pos = PointI{20, 40}, .size = SizeI{.w = 600, .h = 400}},
                          "Terminal", vesper::fonts::title::kTitleFont, work_area};
     Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont};
+    session.terminal = &term;
     // The program behind the screen: a plain POSIX shell on a pty. busybox
     // ash is the initramfs citizen; /bin/sh is the same citizen on a dev
     // machine's console run. TERM=vt100 gives clear its escape words (a

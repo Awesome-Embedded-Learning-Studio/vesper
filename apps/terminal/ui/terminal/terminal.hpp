@@ -75,6 +75,10 @@ class Terminal final : public visor::ui::Widget {
     /// The source's bytes land here: echo in D3, program output in D4.
     void receive(std::string_view bytes) noexcept;
 
+    /// Captures Tab presses and releases while focused, before the host
+    /// hands events to visor's focus traversal. Returns true when consumed.
+    bool capture_event(const visor::host::Event& event) noexcept;
+
     // Grid readback for judgments.
     [[nodiscard]] int cols() const noexcept { return cols_; }
     [[nodiscard]] int rows() const noexcept { return rows_; }

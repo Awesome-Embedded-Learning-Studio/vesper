@@ -4,6 +4,7 @@
 #include "fake_color_host.hpp"
 #include "fonts/demo_font.hpp"
 #include "host/fake_session_host.hpp"
+#include "ui/desktop/desktop.hpp"
 #include "ui/style/theme.hpp"
 #include "ui/terminal/terminal.hpp"
 
@@ -68,9 +69,45 @@ int lit_pixels(const vesper::host::FakeSessionHost& host) {
     return lit;
 }
 
+void tab_keeps_terminal_focus() {
+    {
+        vesper::desktop::Desktop root{kScreenBounds, "VESPER", vesper::fonts::kDemoFont,
+                                      style::kColorDeskTheme};
+        Terminal term{kFullTerm, vesper::fonts::kDemoFont};
+        Terminal sibling{kSmallTerm, vesper::fonts::kDemoFont};
+        RecordingSource source;
+        term.set_source(&source);
+        VESPER_CHECK(root.add_child(&term));
+        VESPER_CHECK(root.add_child(&sibling));
+        term.set_focused(true);
+        visor::ui::InputRouter input;
+        const auto route = [&](const visor::host::Event& event) {
+            if (!term.capture_event(event)) {
+                visor::ui::dispatch_event(root, input, event, 0, false);
+            }
+        };
+        route(KeyDown{.code = 'C'});
+        route(KeyDown{.code = visor::host::kKeyTab});
+        route(visor::host::KeyUp{.code = visor::host::kKeyTab});
+        route(KeyDown{.code = visor::host::kKeyTab});
+        route(KeyDown{.code = 'x'});
+        VESPER_CHECK_EQ(source.sent, std::string{"C\t\tx"});
+        VESPER_CHECK(term.focused());
+        VESPER_CHECK(!sibling.focused());
+        term.set_focused(false);
+        route(KeyDown{.code = visor::host::kKeyTab});
+        VESPER_CHECK(term.focused());
+        VESPER_CHECK_EQ(source.sent, std::string{"C\t\tx"});
+        term.on_key_down(visor::host::kKeyTab, {});
+        VESPER_CHECK_EQ(source.sent, std::string{"C\t\tx\t"});
+    }
+}
+
 } // namespace
 
 void run_terminal_tests() {
+    tab_keeps_terminal_focus();
+
     // Grid derivation: the bounds cut into whole cells, cursor home, every
     // cell born blank.
     {

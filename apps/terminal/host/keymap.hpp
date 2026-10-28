@@ -21,7 +21,7 @@ namespace vesper::host {
  * doubles as the digit '9' in the text world, so the fold spells space
  * 0x20 -- the same reading the X11 and fbdev hosts already hand down, and
  * the one the terminal's byte table expects. A key the table does not know
- * passes its code through unchanged. The core names some evdev values
+ * keeps an opaque code outside printable ASCII. The core names some evdev values
  * itself (Backspace 14, Tab 15, Enter 28 and the out-of-band arrows), and
  * those are simply absent from the table, so what the core already reads
  * survives the fold untouched; a key no consumer names (a function key, a
@@ -34,7 +34,7 @@ namespace vesper::host {
 [[nodiscard]] visor::host::Event fold_text(visor::host::Event event) noexcept;
 
 /// The table half, exposed for the judgments: the code point one evdev key
-/// carries under one shift state, or the key's own number when the table has
+/// carries under one shift state, or an opaque non-text code when the table has
 /// no entry for it.
 [[nodiscard]] std::uint32_t text_code_for(std::uint16_t evdev_code, bool shift) noexcept;
 
