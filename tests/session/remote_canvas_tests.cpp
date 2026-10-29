@@ -203,7 +203,7 @@ void run_remote_canvas_tests() {
         std::array<std::uint8_t, sizeof(vesper::session::Header)> bye{};
         VESPER_CHECK(vesper::session::write_message(bye.data(), bye.size(),
                                                     vesper::session::Word::Bye, nullptr, 0));
-        static_cast<void>(::write(channel.desk, bye.data(), bye.size()));
+        [[maybe_unused]] const auto written = ::write(channel.desk, bye.data(), bye.size());
         canvas.pump();
         VESPER_CHECK(canvas.child_gone());
         VESPER_CHECK_EQ(watch.calls, 1);

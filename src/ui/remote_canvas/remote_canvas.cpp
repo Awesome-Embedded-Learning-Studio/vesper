@@ -125,7 +125,7 @@ void RemoteCanvas::send_close() const noexcept {
     std::array<std::uint8_t, sizeof(vesper::session::Header)> line{};
     if (vesper::session::write_message(line.data(), line.size(), vesper::session::Word::Close,
                                        nullptr, 0)) {
-        static_cast<void>(::write(socket_, line.data(), line.size()));
+        [[maybe_unused]] const ssize_t written = ::write(socket_, line.data(), line.size());
     }
 }
 
