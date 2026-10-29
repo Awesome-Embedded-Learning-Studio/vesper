@@ -10,12 +10,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # of GCC-only flags so clang-tidy and clangd parse it cleanly.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
+set(VESPER_BACKEND "all" CACHE STRING "Display lane selection: all, fbdev, x11, or wayland")
+set_property(CACHE VESPER_BACKEND PROPERTY STRINGS all fbdev x11 wayland)
+if(NOT VESPER_BACKEND MATCHES "^(all|fbdev|x11|wayland)$")
+    message(FATAL_ERROR "VESPER_BACKEND must be all, fbdev, x11, or wayland (got '${VESPER_BACKEND}')")
+endif()
+
 # The visor borrow: VISOR_ROOT lookup, the borrowed targets and the X11 tier.
 include(cmake/visor.cmake)
 
 # The compositor lane (the roadmap's C series): vesper as a Wayland server.
 # It comes after the visor borrow because the judgment lane links both.
-include(cmake/compositor.cmake)
+if(VESPER_BACKEND STREQUAL "all" OR VESPER_BACKEND STREQUAL "wayland")
+    include(cmake/compositor.cmake)
+    set(VESPER_COMPOSITOR_LANE ON)
+endif()
 
 option(VESPER_SANITIZE "ASan+UBSan switch" OFF)
 option(VESPER_TSAN "TSan switch" OFF)
@@ -78,10 +87,12 @@ target_link_libraries(vesper.ui PUBLIC visor.ui visor.host vesper.session vesper
 # guests of the server half, so they ride beside it instead of inside ui,
 # keeping every ui consumer -- the fbdev lane's static link included --
 # free of the wayland and xcb system libraries.
-add_library(vesper.shell STATIC src/ui/shell_desk/shell_desk.cpp
-                                src/ui/wayland_canvas/wayland_canvas.cpp)
-target_include_directories(vesper.shell PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vesper.shell PUBLIC vesper.ui vesper.compositor)
+if(VESPER_COMPOSITOR_LANE)
+    add_library(vesper.shell STATIC src/ui/shell_desk/shell_desk.cpp
+                                    src/ui/wayland_canvas/wayland_canvas.cpp)
+    target_include_directories(vesper.shell PUBLIC ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(vesper.shell PUBLIC vesper.ui vesper.compositor)
+endif()
 
 enable_testing()
 add_subdirectory(tests)

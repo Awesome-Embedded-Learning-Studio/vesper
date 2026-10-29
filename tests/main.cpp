@@ -27,6 +27,7 @@ int main(int /*argc*/, char** argv) { // NOLINT(misc-const-correctness)
     run_keymap_tests();
     run_evdev_input_tests();
     run_fbdev_device_tests();
+#ifdef VESPER_COMPOSITOR_LANE
     run_compositor_server_tests();
     run_compositor_shm_tests();
     run_compositor_surface_tests();
@@ -37,5 +38,6 @@ int main(int /*argc*/, char** argv) { // NOLINT(misc-const-correctness)
     run_compositor_xwayland_tests();
     run_compositor_guest_spawn_tests();
     run_terminal_app_tests();
+#endif
     return vesper::testing::failure_count() == 0 ? 0 : 1;
 }

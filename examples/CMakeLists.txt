@@ -26,13 +26,17 @@ target_link_libraries(d6_block_child PRIVATE vesper.session)
 # The VM lane: the bare-framebuffer desk the initramfs runs under QEMU. It
 # needs no display server, only Linux fbdev/evdev headers, so it builds on
 # every Linux host even where no /dev/fb0 exists to run it against.
-add_executable(fbdev_desktop fbdev_desktop.cpp)
-target_link_libraries(fbdev_desktop PRIVATE vesper.ui)
+if(VESPER_BACKEND STREQUAL "all" OR VESPER_BACKEND STREQUAL "fbdev")
+    add_executable(fbdev_desktop fbdev_desktop.cpp)
+    target_link_libraries(fbdev_desktop PRIVATE vesper.ui)
+endif()
 
 # The C5 live judgment's X guest: a real X11 program against the bridge.
 # Xlib is the eyeball lane's own system library.
-add_executable(xhello xhello.cpp)
-target_link_libraries(xhello PRIVATE X11::X11)
+if(X11_FOUND)
+    add_executable(xhello xhello.cpp)
+    target_link_libraries(xhello PRIVATE X11::X11)
+endif()
 
 # The compositor eyeball lane (the C series): the desk as a Wayland client
 # of its host and a Wayland server for its own guests, one window. Needs

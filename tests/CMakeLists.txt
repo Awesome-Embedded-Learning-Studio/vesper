@@ -9,26 +9,30 @@ add_executable(vesper.tests main.cpp base/pbm_tests.cpp
                             apps/keymap_tests.cpp host/evdev_input_tests.cpp
                             host/fake_host_tests.cpp host/fbdev_device_tests.cpp
                             session/wire_tests.cpp session/remote_canvas_tests.cpp
-                            compositor/server_tests.cpp compositor/sparring_client.cpp
-                            compositor/shm_tests.cpp compositor/surface_tests.cpp
-                            compositor/shell_tests.cpp compositor/seat_tests.cpp
-                            compositor/shell_desk_tests.cpp
-                            compositor/cadence_tests.cpp
-                            compositor/xwayland_tests.cpp
-                            compositor/guest_spawn_tests.cpp
-                            apps/terminal_app_tests.cpp
                             assets/font_tests.cpp)
 # The harness headers (cases.hpp, testing.hpp) stay at the tests root, so the
 # subfolder cases reach them through this include path.
 target_include_directories(vesper.tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-# The compositor lane rides the system wayland client beside the server: the
-# sparring partner speaks wl_shm and xdg words of its own, in process.
-target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.compositor vesper.shell vesper.terminal
-                                        PkgConfig::VESPER_WAYLAND_CLIENT
+target_link_libraries(vesper.tests PRIVATE vesper.ui vesper.terminal
                                         visor.host.posix)
-# The terminal app judgment births the real program; the generator hands
-# its built path over as a word.
-target_compile_definitions(vesper.tests PRIVATE
-    VESPER_TERMINAL_PATH="$<TARGET_FILE:vesper_terminal>")
+if(VESPER_COMPOSITOR_LANE)
+    target_sources(vesper.tests PRIVATE compositor/server_tests.cpp compositor/sparring_client.cpp
+                                        compositor/shm_tests.cpp compositor/surface_tests.cpp
+                                        compositor/shell_tests.cpp compositor/seat_tests.cpp
+                                        compositor/shell_desk_tests.cpp
+                                        compositor/cadence_tests.cpp
+                                        compositor/xwayland_tests.cpp
+                                        compositor/guest_spawn_tests.cpp
+                                        apps/terminal_app_tests.cpp)
+    # The compositor lane rides the system wayland client beside the server: the
+    # sparring partner speaks wl_shm and xdg words of its own, in process.
+    target_link_libraries(vesper.tests PRIVATE vesper.compositor vesper.shell
+                                            PkgConfig::VESPER_WAYLAND_CLIENT)
+    target_compile_definitions(vesper.tests PRIVATE VESPER_COMPOSITOR_LANE)
+    # The terminal app judgment births the real program; the generator hands
+    # its built path over as a word.
+    target_compile_definitions(vesper.tests PRIVATE
+        VESPER_TERMINAL_PATH="$<TARGET_FILE:vesper_terminal>")
+endif()
 
 add_test(NAME vesper.tests COMMAND vesper.tests)
