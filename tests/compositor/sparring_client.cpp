@@ -174,12 +174,14 @@ const wl_keyboard_listener kKeyboard = {
 
 void on_seat_capabilities(void* data, wl_seat* seat, std::uint32_t capabilities) noexcept {
     auto* client = static_cast<SparringClient*>(data);
-    if ((capabilities & WL_SEAT_CAPABILITY_POINTER) != 0 && client->pointer_proxy() == nullptr) {
+    if ((capabilities & WL_SEAT_CAPABILITY_POINTER) != 0 && client->take_hands() &&
+        client->pointer_proxy() == nullptr) {
         wl_pointer* pointer = wl_seat_get_pointer(seat);
         client->adopt_pointer(pointer);
         wl_pointer_add_listener(pointer, &kPointer, data);
     }
-    if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) != 0 && client->keyboard_proxy() == nullptr) {
+    if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) != 0 && client->take_hands() &&
+        client->keyboard_proxy() == nullptr) {
         wl_keyboard* keyboard = wl_seat_get_keyboard(seat);
         client->adopt_keyboard(keyboard);
         wl_keyboard_add_listener(keyboard, &kKeyboard, data);
@@ -854,6 +856,10 @@ wl_buffer* SparringClient::make_buffer(std::size_t offset_words, int width, int 
     return buffer;
 }
 
+void SparringClient::set_take_hands(bool on) noexcept {
+    take_hands_ = on;
+}
+
 bool SparringClient::bind_seat(compositor::Server& server) noexcept {
     if (display_ == nullptr || seat_ != nullptr) {
         return false;
@@ -871,8 +877,9 @@ bool SparringClient::bind_seat(compositor::Server& server) noexcept {
     }
     wl_seat_add_listener(seat_, &kSeat, this);
     // Two exchanges: the capabilities word arrives on the first, the
-    // pointer and keyboard objects stand on the second.
-    return settle(server, 2) && pointer_ != nullptr && keyboard_ != nullptr;
+    // pointer and keyboard objects stand on the second. A bare-seated
+    // guest (take_hands off) checks only that the word arrived.
+    return settle(server, 2) && (!take_hands_ || (pointer_ != nullptr && keyboard_ != nullptr));
 }
 
 const SparringClient::KeyWord* SparringClient::key_at(std::size_t index) const noexcept {

@@ -79,6 +79,14 @@ const struct wl_touch_interface kTouchTable = {
 // --- the desk's half ---------------------------------------------------------
 
 Seat::Seat() noexcept {
+    // The death listeners ride self-linked until a focus arms them; removing
+    // an unarmed listener is then a no-op by list arithmetic alone.
+    keyboard_death_.seat = this;
+    keyboard_death_.listener.notify = &Seat::keyboard_focus_died;
+    wl_list_init(&keyboard_death_.listener.link);
+    pointer_death_.seat = this;
+    pointer_death_.listener.notify = &Seat::pointer_focus_died;
+    wl_list_init(&pointer_death_.listener.link);
     // The keymap file is written once and dup'ed per keyboard; the guests
     // close their copies, the original stays the seat's.
     keymap_fd_ = ::memfd_create("vesper-keymap", 0);
@@ -100,6 +108,44 @@ Seat::~Seat() {
 
 void Seat::note_time_ms(std::uint32_t ms) noexcept {
     time_ms_ = ms;
+}
+
+// --- the focus's own death word ----------------------------------------------
+
+void Seat::arm_focus_death(FocusDeath& death, wl_resource* surface_resource) noexcept {
+    wl_resource_add_destroy_listener(surface_resource, &death.listener);
+}
+
+void Seat::disarm_focus_death(FocusDeath& death) noexcept {
+    // Self-linked means unarmed: the remove is a no-op and the list stays
+    // whole for the next aim.
+    wl_list_remove(&death.listener.link);
+    wl_list_init(&death.listener.link);
+}
+
+void Seat::keyboard_focus_died(wl_listener* listener, void* data) noexcept {
+    const auto* death = reinterpret_cast<FocusDeath*>( // NOLINT
+        reinterpret_cast<uintptr_t>(listener) - offsetof(FocusDeath, listener));
+    Seat* seat = death->seat;
+    disarm_focus_death(seat->keyboard_death_);
+    if (seat->keyboard_focus_ != nullptr && seat->keyboard_focus_->resource() == data) {
+        // The aim's face dies first in the destroyer chain: the aim clears
+        // here, and the selection hears the focus is nobody's now.
+        seat->keyboard_focus_ = nullptr;
+        if (seat->keyboard_notifier_ != nullptr) {
+            seat->keyboard_notifier_(nullptr, seat->notifier_context_);
+        }
+    }
+}
+
+void Seat::pointer_focus_died(wl_listener* listener, void* data) noexcept {
+    const auto* death = reinterpret_cast<FocusDeath*>( // NOLINT
+        reinterpret_cast<uintptr_t>(listener) - offsetof(FocusDeath, listener));
+    Seat* seat = death->seat;
+    disarm_focus_death(seat->pointer_death_);
+    if (seat->pointer_focus_ != nullptr && seat->pointer_focus_->resource() == data) {
+        seat->pointer_focus_ = nullptr;
+    }
 }
 
 Seat::Binding* Seat::binding_of_client(wl_client* client) noexcept {
@@ -148,9 +194,11 @@ void Seat::pointer_enter(Surface* surface, visor::base::PointI at) noexcept {
         }
     }
     pointer_focus_ = surface;
+    disarm_focus_death(pointer_death_);
     if (surface == nullptr) {
         return;
     }
+    arm_focus_death(pointer_death_, surface->resource());
     if (const Seat::Binding* fresh = binding_of_surface(surface);
         fresh != nullptr && fresh->pointer != nullptr) {
         wl_pointer_send_enter(fresh->pointer, next_serial(), surface->resource(),
@@ -163,14 +211,19 @@ void Seat::pointer_leave() noexcept {
 }
 
 void Seat::pointer_motion(visor::base::PointI at) noexcept {
-    if (const Seat::Binding* binding = pointer_binding(); binding != nullptr) {
+    // The object words ride only when the guest took the hand: a guest that
+    // bound the seat but never asked for the pointer (headless clipboard
+    // tools, the demo cars) owns a binding whose pointer half is empty.
+    if (const Seat::Binding* binding = pointer_binding();
+        binding != nullptr && binding->pointer != nullptr) {
         wl_pointer_send_motion(binding->pointer, time_ms_, wl_fixed_from_int(at.x),
                                wl_fixed_from_int(at.y));
     }
 }
 
 void Seat::pointer_button(std::uint32_t button, bool pressed) noexcept {
-    if (const Seat::Binding* binding = pointer_binding(); binding != nullptr) {
+    if (const Seat::Binding* binding = pointer_binding();
+        binding != nullptr && binding->pointer != nullptr) {
         wl_pointer_send_button(binding->pointer, next_serial(), time_ms_, button,
                                pressed ? WL_POINTER_BUTTON_STATE_PRESSED
                                        : WL_POINTER_BUTTON_STATE_RELEASED);
@@ -179,7 +232,7 @@ void Seat::pointer_button(std::uint32_t button, bool pressed) noexcept {
 
 void Seat::pointer_wheel(std::int32_t dx, std::int32_t dy) noexcept {
     const Seat::Binding* binding = pointer_binding();
-    if (binding == nullptr) {
+    if (binding == nullptr || binding->pointer == nullptr) {
         return;
     }
     // One high-resolution word per axis, each closed by a frame: the v5
@@ -210,6 +263,10 @@ void Seat::keyboard_enter(Surface* surface) noexcept {
         }
     }
     keyboard_focus_ = surface;
+    disarm_focus_death(keyboard_death_);
+    if (surface != nullptr) {
+        arm_focus_death(keyboard_death_, surface->resource());
+    }
     // The focus's client word rides with the crossing itself: the desk's
     // listener (the selection's delivery follows the keyboard) hears the
     // same word the guest did, null crossing included.
@@ -234,7 +291,10 @@ void Seat::key(std::uint32_t code, bool pressed) noexcept {
     // to their key numbers, everything else passes through untouched -- the
     // text-code fold back lives at the canvas, the desk's own gate, not on
     // the protocol side.
-    if (const Seat::Binding* binding = keyboard_binding(); binding != nullptr) {
+    // The same empty-hand guard as the pointer's: focus aimed at a guest
+    // that never took a keyboard (or took it and let it go) hears nothing.
+    if (const Seat::Binding* binding = keyboard_binding();
+        binding != nullptr && binding->keyboard != nullptr) {
         wl_keyboard_send_key(binding->keyboard, next_serial(), time_ms_, evdev_keycode(code),
                              pressed ? WL_KEYBOARD_KEY_STATE_PRESSED
                                      : WL_KEYBOARD_KEY_STATE_RELEASED);
@@ -265,7 +325,8 @@ void Seat::set_modifiers(visor::host::Modifiers modifiers) noexcept {
     if (modifiers.super) {
         mask |= kSuperMask;
     }
-    if (const Seat::Binding* binding = keyboard_binding(); binding != nullptr) {
+    if (const Seat::Binding* binding = keyboard_binding();
+        binding != nullptr && binding->keyboard != nullptr) {
         wl_keyboard_send_modifiers(binding->keyboard, next_serial(), mask, 0, 0, 0);
     }
 }

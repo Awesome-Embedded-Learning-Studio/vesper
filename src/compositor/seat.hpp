@@ -3,11 +3,14 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 #include "compositor/surface.hpp"
 
 #include "visor/base/geometry/point.hpp"
 #include "visor/bindings/events/modifiers.hpp"
+
+#include <wayland-server-core.h>
 
 struct wl_client;   // NOLINT(readability-identifier-naming)
 struct wl_resource; // NOLINT(readability-identifier-naming)
@@ -122,6 +125,23 @@ class Seat {
         wl_resource* keyboard = nullptr;
     };
 
+    /// The aim's own death word: the focused wl_surface's resource tells the
+    /// seat before its destroyer chain runs, so a guest dying under the
+    /// focus (a killed clipboard tool, a torn-down X client) clears the aim
+    /// instead of leaving it pointing at freed memory. The listener rides
+    /// with a back-pointer, and the struct stays standard-layout so the
+    /// container recovery is plain offsetof arithmetic.
+    struct FocusDeath {
+        Seat* seat = nullptr;
+        wl_listener listener{}; // the link self-aims when unarmed
+    };
+    static_assert(std::is_standard_layout_v<FocusDeath>);
+
+    static void keyboard_focus_died(wl_listener* listener, void* data) noexcept;
+    static void pointer_focus_died(wl_listener* listener, void* data) noexcept;
+    static void arm_focus_death(FocusDeath& death, wl_resource* surface_resource) noexcept;
+    static void disarm_focus_death(FocusDeath& death) noexcept;
+
     [[nodiscard]] Binding* binding_of_client(wl_client* client) noexcept;
     [[nodiscard]] Binding* binding_of_surface(Surface* surface) noexcept;
     [[nodiscard]] Binding* pointer_binding() noexcept;
@@ -131,6 +151,8 @@ class Seat {
     std::array<Binding, kClientCapacity> bindings_{};
     Surface* pointer_focus_ = nullptr;
     Surface* keyboard_focus_ = nullptr;
+    FocusDeath pointer_death_{};
+    FocusDeath keyboard_death_{};
     void (*keyboard_notifier_)(wl_client* client, void* context) noexcept = nullptr;
     void* notifier_context_ = nullptr;
     std::uint32_t time_ms_ = 0;

@@ -128,6 +128,12 @@ class SparringClient {
     /// hands the desk advertised.
     [[nodiscard]] bool bind_seat(compositor::Server& server) noexcept;
 
+    /// Whether the capabilities word births the pointer and keyboard
+    /// objects. On by default; off reproduces the bare-seated guest (the
+    /// clipboard demo cars) that binds the seat and never takes a hand.
+    void set_take_hands(bool on) noexcept;
+    [[nodiscard]] bool take_hands() const noexcept { return take_hands_; }
+
     // The recorded input, one entry per word the desk sent.
     struct KeyWord {
         std::uint32_t code = 0;
@@ -341,6 +347,7 @@ class SparringClient {
     int pointer_enters_ = 0;
     int pointer_leaves_ = 0;
     int keyboard_enters_ = 0;
+    bool take_hands_ = true;
     int keyboard_leaves_ = 0;
     std::uint32_t last_modifiers_ = 0;
     std::size_t keymap_bytes_ = 0;
