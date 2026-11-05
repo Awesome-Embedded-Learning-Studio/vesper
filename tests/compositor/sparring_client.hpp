@@ -7,6 +7,10 @@
 struct wl_buffer;
 struct wl_callback;
 struct wl_compositor;
+struct wl_data_device;
+struct wl_data_device_manager;
+struct wl_data_offer;
+struct wl_data_source;
 struct wl_display;
 struct wl_keyboard;
 struct wl_pointer;
@@ -124,6 +128,12 @@ class SparringClient {
     /// hands the desk advertised.
     [[nodiscard]] bool bind_seat(compositor::Server& server) noexcept;
 
+    /// Whether the capabilities word births the pointer and keyboard
+    /// objects. On by default; off reproduces the bare-seated guest (the
+    /// clipboard demo cars) that binds the seat and never takes a hand.
+    void set_take_hands(bool on) noexcept;
+    [[nodiscard]] bool take_hands() const noexcept { return take_hands_; }
+
     // The recorded input, one entry per word the desk sent.
     struct KeyWord {
         std::uint32_t code = 0;
@@ -157,6 +167,53 @@ class SparringClient {
     [[nodiscard]] int keyboard_leaves() const noexcept { return keyboard_leaves_; }
     [[nodiscard]] std::uint32_t last_modifiers() const noexcept { return last_modifiers_; }
     [[nodiscard]] std::size_t keymap_bytes() const noexcept { return keymap_bytes_; }
+
+    // --- the selection channel, the A1 words --------------------------------
+    //
+    // The partner plays both halves: it owns sources (the copy side) and
+    // devices (the paste side), records every word the desk says, and takes
+    // the pipe end the desk hands over so a judgment can pour bytes through
+    // the clipboard without leaving the process.
+
+    /// Binds wl_data_device_manager using the last survey's table.
+    [[nodiscard]] bool bind_data_manager() noexcept;
+
+    /// Creates this partner's data source with its listener attached; null
+    /// when the manager was never bound.
+    [[nodiscard]] wl_data_source* make_data_source() noexcept;
+
+    /// Advertises one mime type on the standing source.
+    void offer_mime(const char* mime) noexcept;
+
+    /// Retires the source the protocol's own way.
+    void destroy_data_source() noexcept;
+
+    /// Asks the manager for this partner's data device (the seat must be
+    /// bound) and, after one exchange, has heard whatever selection stands.
+    [[nodiscard]] bool make_data_device(compositor::Server& server) noexcept;
+
+    /// Sets this partner's source as the selection, or clears it; the
+    /// serial mimics the word a guest echoes back.
+    void set_selection(std::uint32_t serial, bool to_source) noexcept;
+
+    /// Asks the standing offer for mime over fd; the pipe end travels the
+    /// wire and the judgment reads its other half.
+    void receive_selection(const char* mime, int fd) noexcept;
+
+    static constexpr std::size_t kMimeCapacity = 8;
+    static constexpr std::size_t kMimeBytes = 48;
+
+    [[nodiscard]] const char* offer_mime_at(std::size_t index) const noexcept;
+    [[nodiscard]] std::size_t offer_mime_count() const noexcept { return offer_mime_count_; }
+    [[nodiscard]] int selection_count() const noexcept { return selection_count_; }
+    /// Whether the last selection word carried an offer or the empty word.
+    [[nodiscard]] bool selection_held() const noexcept { return selection_held_; }
+    [[nodiscard]] int source_cancelled_count() const noexcept { return source_cancelled_; }
+    [[nodiscard]] int source_send_count() const noexcept { return source_send_count_; }
+    [[nodiscard]] const char* source_send_mime() const noexcept;
+    /// Takes the pipe end the desk handed the source; the slot resets and
+    /// the judgment closes the end after pouring.
+    [[nodiscard]] int take_source_send_fd() noexcept;
 
     /// Creates one surface; null when the compositor was never bound.
     [[nodiscard]] wl_surface* make_surface() noexcept;
@@ -232,6 +289,12 @@ class SparringClient {
     void note_pointer_leave() noexcept;
     void note_keyboard_enter() noexcept;
     void note_keyboard_leave() noexcept;
+    // The data channel listeners' hands, the same public-of-necessity rule.
+    void adopt_data_offer(wl_data_offer* offer) noexcept;
+    void record_offer_mime(const char* mime) noexcept;
+    void note_selection(wl_data_offer* offer) noexcept;
+    void note_source_send(const char* mime, int fd) noexcept;
+    void note_source_cancelled() noexcept { ++source_cancelled_; }
 
   private:
     /// Reads whatever arrived without waiting and runs every buffered event.
@@ -253,6 +316,18 @@ class SparringClient {
     int pool_fd_ = -1;
     std::uint32_t* pool_words_ = nullptr;
     std::size_t pool_bytes_ = 0;
+    wl_data_device_manager* data_manager_ = nullptr;
+    wl_data_device* data_device_ = nullptr;
+    wl_data_source* data_source_ = nullptr;
+    wl_data_offer* data_offer_ = nullptr;
+    std::array<std::array<char, kMimeBytes>, kMimeCapacity> offer_mimes_{};
+    std::size_t offer_mime_count_ = 0;
+    int selection_count_ = 0;
+    bool selection_held_ = false;
+    int source_cancelled_ = 0;
+    int source_send_count_ = 0;
+    std::array<char, kMimeBytes> source_send_mime_{};
+    int source_send_fd_ = -1;
     std::array<wl_buffer*, kBufferCapacity> buffers_{};
     std::size_t buffer_count_ = 0;
     int frame_done_count_ = 0;
@@ -272,6 +347,7 @@ class SparringClient {
     int pointer_enters_ = 0;
     int pointer_leaves_ = 0;
     int keyboard_enters_ = 0;
+    bool take_hands_ = true;
     int keyboard_leaves_ = 0;
     std::uint32_t last_modifiers_ = 0;
     std::size_t keymap_bytes_ = 0;

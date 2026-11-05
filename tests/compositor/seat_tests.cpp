@@ -121,6 +121,66 @@ void run_keyboard_tests() {
     VESPER_CHECK_EQ(lane.client.key_count(), 3UZ);
 }
 
+void run_focus_death_tests() {
+    SeatLane seat_lane;
+    VESPER_CHECK(seat_lane.ok);
+    Lane& lane = seat_lane.lane;
+    Seat& seat = lane.server.seat();
+    ShellSurface* shell = lane.server.shell_surface(0);
+    VESPER_CHECK(shell != nullptr);
+    if (shell == nullptr) {
+        return;
+    }
+
+    // A guest dies under the keyboard: headless clipboard tools bind a seat,
+    // live briefly and hang up while the desk still aims the keyboard at
+    // some guest. The keys and modifiers that arrive after the goodbye must
+    // land nowhere -- a post to the dead guest's freed keyboard objects is
+    // the compositor's own death, the one wl-copy's timeouts taught.
+    seat.keyboard_enter(shell->surface());
+    VESPER_CHECK(lane.client.settle(lane.server));
+    lane.client.disconnect();
+    VESPER_CHECK(lane.server.dispatch(0));
+    seat.set_modifiers(visor::host::Modifiers{.shift = true});
+    seat.key(kKeyA, true);
+    seat.keyboard_leave();
+    VESPER_CHECK_EQ(lane.server.client_count(), 0);
+}
+
+void run_bare_hands_tests() {
+    Lane lane;
+    VESPER_CHECK(lane.up);
+    SparringClient& guest = lane.client;
+    // The clipboard demo car's shape: the seat bound, the hands declined.
+    guest.set_take_hands(false);
+    const bool armed = guest.survey_globals(lane.server) && guest.bind_shm() &&
+                       guest.bind_compositor() && guest.bind_wm_base() &&
+                       guest.bind_seat(lane.server) && guest.make_pool(64UZ * 32U * 4U) &&
+                       guest.settle(lane.server) && guest.make_surface() != nullptr &&
+                       guest.make_toplevel(lane.server, "Bare");
+    VESPER_CHECK(armed);
+    ShellSurface* shell = lane.server.shell_surface(0);
+    VESPER_CHECK(shell != nullptr);
+    if (shell == nullptr || shell->surface() == nullptr) {
+        return;
+    }
+
+    // The focus crosses to a guest that took no hands. Keys, modifiers and
+    // the crossing's own words land nowhere; the seat posts to the object
+    // only when the guest actually holds one. This is the crash that a
+    // modifier press over such a guest taught: the guard, not the guest.
+    lane.server.seat().keyboard_enter(shell->surface());
+    VESPER_CHECK(guest.settle(lane.server));
+    lane.server.seat().key(kKeyA, true);
+    lane.server.seat().set_modifiers(visor::host::Modifiers{.shift = true});
+    lane.server.seat().pointer_enter(shell->surface(), PointI{1, 1});
+    lane.server.seat().pointer_button(kBtnLeft, true);
+    lane.server.seat().pointer_wheel(0, 12);
+    VESPER_CHECK(guest.settle(lane.server));
+    VESPER_CHECK_EQ(guest.key_count(), 0UZ);
+    VESPER_CHECK(guest.alive());
+}
+
 void run_pointer_tests() {
     SeatLane seat_lane;
     VESPER_CHECK(seat_lane.ok);
@@ -280,6 +340,8 @@ void run_canvas_forwarding_tests() {
 
 void run_compositor_seat_tests() {
     run_keyboard_tests();
+    run_focus_death_tests();
+    run_bare_hands_tests();
     run_pointer_tests();
     run_focus_isolation_tests();
     run_canvas_forwarding_tests();
