@@ -379,9 +379,17 @@ int main(int argc, const char* const* argv) {
     while (!guest.configured && wl_display_dispatch(display) >= 0) {
     }
 
+    // The face lands before the quiet loop: a guest that commits no buffer
+    // is a window the desk never maps, and there would be nothing to click.
+    paint(guest);
+    wl_surface_attach(guest.surface, guest.buffers[guest.active], 0, 0);
+    wl_surface_damage(guest.surface, 0, 0, kWidth, kHeight);
+    wl_surface_commit(guest.surface);
+    static_cast<void>(wl_display_flush(display));
+
     // The quiet loop: a car with no animation, repaint only when the word's
     // state moves. The click is the gear stick.
-    bool shown = false; // the square's last painted state
+    bool shown = guest.copy_role ? guest.armed : guest.poured;
     while (!guest.close_requested) {
         struct pollfd waiter{
             .fd = wl_display_get_fd(display),
