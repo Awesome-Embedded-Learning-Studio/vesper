@@ -195,6 +195,57 @@ const wl_seat_listener kSeat = {
     .name = on_seat_name,
 };
 
+void on_data_offer_word(void* data, wl_data_device* /*device*/, wl_data_offer* offer) noexcept {
+    // The desk hands the offer first; its mimes ride as offer words on it.
+    static_cast<SparringClient*>(data)->adopt_data_offer(offer);
+}
+
+void on_data_selection_word(void* data, wl_data_device* /*device*/, wl_data_offer* offer) noexcept {
+    static_cast<SparringClient*>(data)->note_selection(offer);
+}
+
+const wl_data_device_listener kDataDevice = {
+    .data_offer = on_data_offer_word,
+    .enter = nullptr, // the drag chapter's words; the desk speaks none yet
+    .leave = nullptr,
+    .motion = nullptr,
+    .drop = nullptr,
+    .selection = on_data_selection_word,
+};
+
+void on_data_offer_mime(void* data, wl_data_offer* /*offer*/, const char* mime_type) noexcept {
+    static_cast<SparringClient*>(data)->record_offer_mime(mime_type);
+}
+
+const wl_data_offer_listener kDataOffer = {
+    .offer = on_data_offer_mime,
+    .source_actions = nullptr, // version 3 words the desk does not speak
+    .action = nullptr,
+};
+
+void on_source_target(void* /*data*/, wl_data_source* /*source*/,
+                      const char* /*mime_type*/) noexcept {
+    // The desk never narrows a standing selection; heard and filed.
+}
+
+void on_source_send(void* data, wl_data_source* /*source*/, const char* mime_type,
+                    std::int32_t fd) noexcept {
+    static_cast<SparringClient*>(data)->note_source_send(mime_type, fd);
+}
+
+void on_source_cancelled(void* data, wl_data_source* /*source*/) noexcept {
+    static_cast<SparringClient*>(data)->note_source_cancelled();
+}
+
+const wl_data_source_listener kDataSource = {
+    .target = on_source_target,
+    .send = on_source_send,
+    .cancelled = on_source_cancelled,
+    .dnd_drop_performed = nullptr, // drag chapter's words, same silence
+    .dnd_finished = nullptr,
+    .action = nullptr,
+};
+
 const xdg_toplevel_listener kToplevel = {
     .configure = on_toplevel_configure,
     .close = on_toplevel_close,
@@ -275,6 +326,28 @@ void SparringClient::disconnect() noexcept {
     if (seat_ != nullptr) {
         wl_proxy_destroy(reinterpret_cast<wl_proxy*>(seat_));
         seat_ = nullptr;
+    }
+    // The data channel's goodbyes, newest first: a pipe end the judgment
+    // forgot to pour stays this object's to close.
+    if (source_send_fd_ >= 0) {
+        ::close(source_send_fd_);
+        source_send_fd_ = -1;
+    }
+    if (data_source_ != nullptr) {
+        wl_proxy_destroy(reinterpret_cast<wl_proxy*>(data_source_));
+        data_source_ = nullptr;
+    }
+    if (data_offer_ != nullptr) {
+        wl_proxy_destroy(reinterpret_cast<wl_proxy*>(data_offer_));
+        data_offer_ = nullptr;
+    }
+    if (data_device_ != nullptr) {
+        wl_proxy_destroy(reinterpret_cast<wl_proxy*>(data_device_));
+        data_device_ = nullptr;
+    }
+    if (data_manager_ != nullptr) {
+        wl_proxy_destroy(reinterpret_cast<wl_proxy*>(data_manager_));
+        data_manager_ = nullptr;
     }
     if (toplevel_ != nullptr) {
         wl_proxy_destroy(reinterpret_cast<wl_proxy*>(toplevel_));
@@ -582,6 +655,124 @@ void SparringClient::request_frame() noexcept {
         wl_callback* callback = wl_surface_frame(surface_);
         wl_callback_add_listener(callback, &kFrame, this);
     }
+}
+
+bool SparringClient::bind_data_manager() noexcept {
+    if (display_ == nullptr || data_manager_ != nullptr) {
+        return false;
+    }
+    const Global* found = find_global("wl_data_device_manager");
+    if (found == nullptr) {
+        return false;
+    }
+    wl_registry* registry = wl_display_get_registry(display_);
+    data_manager_ = static_cast<wl_data_device_manager*>(
+        wl_registry_bind(registry, found->name, &wl_data_device_manager_interface, found->version));
+    wl_registry_destroy(registry);
+    return data_manager_ != nullptr;
+}
+
+wl_data_source* SparringClient::make_data_source() noexcept {
+    if (data_manager_ == nullptr || data_source_ != nullptr) {
+        return nullptr;
+    }
+    data_source_ = wl_data_device_manager_create_data_source(data_manager_);
+    if (data_source_ == nullptr) {
+        return nullptr;
+    }
+    wl_data_source_add_listener(data_source_, &kDataSource, this);
+    return data_source_;
+}
+
+void SparringClient::offer_mime(const char* mime) noexcept {
+    if (data_source_ != nullptr) {
+        wl_data_source_offer(data_source_, mime);
+    }
+}
+
+void SparringClient::destroy_data_source() noexcept {
+    if (data_source_ != nullptr) {
+        wl_data_source* source = data_source_;
+        data_source_ = nullptr; // disconnect must not destroy it twice
+        wl_data_source_destroy(source);
+    }
+}
+
+bool SparringClient::make_data_device(compositor::Server& server) noexcept {
+    if (display_ == nullptr || data_manager_ == nullptr || seat_ == nullptr ||
+        data_device_ != nullptr) {
+        return false;
+    }
+    data_device_ = wl_data_device_manager_get_data_device(data_manager_, seat_);
+    if (data_device_ == nullptr) {
+        return false;
+    }
+    wl_data_device_add_listener(data_device_, &kDataDevice, this);
+    // Two exchanges: the device stands on the first, whatever selection
+    // already stands lands on the second.
+    return settle(server, 2);
+}
+
+void SparringClient::set_selection(std::uint32_t serial, bool to_source) noexcept {
+    if (data_device_ != nullptr) {
+        wl_data_device_set_selection(data_device_, to_source ? data_source_ : nullptr, serial);
+    }
+}
+
+void SparringClient::receive_selection(const char* mime, int fd) noexcept {
+    if (data_offer_ != nullptr) {
+        wl_data_offer_receive(data_offer_, mime, fd);
+    }
+}
+
+const char* SparringClient::offer_mime_at(std::size_t index) const noexcept {
+    return index < offer_mime_count_ ? offer_mimes_[index].data() : nullptr;
+}
+
+const char* SparringClient::source_send_mime() const noexcept {
+    return source_send_count_ > 0 ? source_send_mime_.data() : nullptr;
+}
+
+int SparringClient::take_source_send_fd() noexcept {
+    const int fd = source_send_fd_;
+    source_send_fd_ = -1;
+    return fd;
+}
+
+void SparringClient::adopt_data_offer(wl_data_offer* offer) noexcept {
+    // A fresh offer retires the old one the protocol's way; the desk frees
+    // its half when the destroy word arrives.
+    if (data_offer_ != nullptr) {
+        wl_proxy_destroy(reinterpret_cast<wl_proxy*>(data_offer_));
+    }
+    data_offer_ = offer;
+    offer_mime_count_ = 0;
+    wl_data_offer_add_listener(offer, &kDataOffer, this);
+}
+
+void SparringClient::record_offer_mime(const char* mime) noexcept {
+    if (offer_mime_count_ < offer_mimes_.size()) {
+        auto& slot = offer_mimes_[offer_mime_count_++];
+        slot.fill('\0');
+        std::strncpy(slot.data(), mime, slot.size() - 1);
+    }
+}
+
+void SparringClient::note_selection(wl_data_offer* offer) noexcept {
+    ++selection_count_;
+    selection_held_ = offer != nullptr;
+}
+
+void SparringClient::note_source_send(const char* mime, int fd) noexcept {
+    ++source_send_count_;
+    source_send_mime_.fill('\0');
+    std::strncpy(source_send_mime_.data(), mime, source_send_mime_.size() - 1);
+    // One pipe end at a time: a second send the judgment never poured is
+    // this object's to close, not the kernel's to keep.
+    if (source_send_fd_ >= 0) {
+        ::close(source_send_fd_);
+    }
+    source_send_fd_ = fd;
 }
 
 bool SparringClient::bind_shm() noexcept {

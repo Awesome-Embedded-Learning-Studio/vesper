@@ -91,9 +91,10 @@ void run_globals_tests() {
     VESPER_CHECK_EQ(lane.client.version_of("wl_shm"), 1U);
     VESPER_CHECK_EQ(lane.client.version_of("wl_seat"), 5U);
     VESPER_CHECK_EQ(lane.client.version_of("xdg_wm_base"), 1U);
-    // Xwayland sees the desk output; clipboard support remains absent.
+    // Xwayland sees the desk output; the selection channel speaks at the
+    // version its words are complete (A1).
     VESPER_CHECK_EQ(lane.client.version_of("wl_output"), 2U);
-    VESPER_CHECK_EQ(lane.client.version_of("wl_data_device_manager"), 0U);
+    VESPER_CHECK_EQ(lane.client.version_of("wl_data_device_manager"), 1U);
     VESPER_CHECK_EQ(lane.server.client_count(), 1);
 }
 

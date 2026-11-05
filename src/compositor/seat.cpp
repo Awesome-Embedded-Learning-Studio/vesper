@@ -210,6 +210,13 @@ void Seat::keyboard_enter(Surface* surface) noexcept {
         }
     }
     keyboard_focus_ = surface;
+    // The focus's client word rides with the crossing itself: the desk's
+    // listener (the selection's delivery follows the keyboard) hears the
+    // same word the guest did, null crossing included.
+    if (keyboard_notifier_ != nullptr) {
+        const Binding* fresh = binding_of_surface(surface);
+        keyboard_notifier_(fresh != nullptr ? fresh->client : nullptr, notifier_context_);
+    }
     if (surface == nullptr) {
         return;
     }
@@ -236,6 +243,12 @@ void Seat::key(std::uint32_t code, bool pressed) noexcept {
 
 void Seat::keyboard_leave() noexcept {
     keyboard_enter(nullptr);
+}
+
+void Seat::set_keyboard_client_notifier(void (*notify)(wl_client* client, void* context) noexcept,
+                                        void* context) noexcept {
+    keyboard_notifier_ = notify;
+    notifier_context_ = context;
 }
 
 void Seat::set_modifiers(visor::host::Modifiers modifiers) noexcept {

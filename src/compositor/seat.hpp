@@ -84,6 +84,13 @@ class Seat {
     /// The surface holding the keyboard, if any.
     [[nodiscard]] Surface* keyboard_focus() const noexcept;
 
+    /// Hands the keyboard-focus client to a listener the desk wires in (the
+    /// selection's delivery follows the keyboard). The seat names no
+    /// consumer itself; a null notifier is a seat nobody wired, and focus
+    /// still crosses without a word to anyone.
+    void set_keyboard_client_notifier(void (*notify)(wl_client* client, void* context) noexcept,
+                                      void* context) noexcept;
+
     // The protocol tables' hands, the Wiring shape again: every request
     // and every resource-goodbye that reaches this seat's state.
     struct Wiring {
@@ -124,6 +131,8 @@ class Seat {
     std::array<Binding, kClientCapacity> bindings_{};
     Surface* pointer_focus_ = nullptr;
     Surface* keyboard_focus_ = nullptr;
+    void (*keyboard_notifier_)(wl_client* client, void* context) noexcept = nullptr;
+    void* notifier_context_ = nullptr;
     std::uint32_t time_ms_ = 0;
     std::uint32_t serial_ = 0;
     int keymap_fd_ = -1;
