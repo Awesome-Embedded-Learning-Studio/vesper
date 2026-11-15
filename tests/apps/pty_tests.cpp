@@ -80,10 +80,10 @@ void run_pty_tests() {
         if (session.has_value()) {
             VESPER_CHECK(session->write_master("HI\n"));
             drain_into(term, *session, 3000);
-            VESPER_CHECK_EQ(term.cell(0, 0), 'H');
-            VESPER_CHECK_EQ(term.cell(1, 0), 'I');
-            VESPER_CHECK_EQ(term.cell(0, 1), 'H');
-            VESPER_CHECK_EQ(term.cell(1, 1), 'I');
+            VESPER_CHECK_EQ(term.cell(0, 0), U'H');
+            VESPER_CHECK_EQ(term.cell(1, 0), U'I');
+            VESPER_CHECK_EQ(term.cell(0, 1), U'H');
+            VESPER_CHECK_EQ(term.cell(1, 1), U'I');
         }
     }
 
@@ -96,9 +96,9 @@ void run_pty_tests() {
         VESPER_CHECK(session.has_value());
         if (session.has_value()) {
             drain_into(term, *session, 3000);
-            VESPER_CHECK_EQ(term.cell(0, 0), 'B');
-            VESPER_CHECK_EQ(term.cell(1, 0), 'Y');
-            VESPER_CHECK_EQ(term.cell(2, 0), 'E');
+            VESPER_CHECK_EQ(term.cell(0, 0), U'B');
+            VESPER_CHECK_EQ(term.cell(1, 0), U'Y');
+            VESPER_CHECK_EQ(term.cell(2, 0), U'E');
             VESPER_CHECK(session->child_gone());
             std::array<std::uint8_t, 8> quiet{};
             VESPER_CHECK_EQ(session->read_master(quiet.data(), 8), 0);
@@ -116,7 +116,7 @@ void run_pty_tests() {
         if (session.has_value()) {
             drain_into(term, *session, 3000);
             VESPER_CHECK(session->child_gone());
-            VESPER_CHECK_EQ(term.cell(0, 0), ' ');
+            VESPER_CHECK_EQ(term.cell(0, 0), U' ');
         }
     }
 }

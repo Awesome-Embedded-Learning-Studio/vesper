@@ -9,6 +9,7 @@
 // run the loop -- the table filled is visor's, not the old repo's ABI. The guest's /init finds both
 // by name; a run ends by SIGTERM from the surrounding `timeout`, there is no close button a bare
 // framebuffer could own.
+#include "fonts/han16.hpp"
 #include "fonts/term_font.hpp"
 #include "fonts/title_font.hpp"
 #include "fonts/ui_font.hpp"
@@ -361,7 +362,15 @@ int main(int argc, const char* const* argv) {
 
     WindowFrame term_win{RectI{.pos = PointI{20, 40}, .size = SizeI{.w = 600, .h = 400}},
                          "Terminal", vesper::fonts::title::kTitleFont, work_area};
-    Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont};
+    // The CJK companion beside the ASCII font: han16's 16px glyphs take two
+    // columns of the 8px grid, and the grid's own metrics stay the ASCII
+    // font's so the desk's layout is unchanged.
+    const visor::draw::MonoFont kWideFont{
+        .line_height = visor::assets::han16::kLineHeight,
+        .glyphs = visor::assets::han16::kGlyphs,
+        .bits = visor::assets::han16::kBits,
+    };
+    Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont, &kWideFont};
     session.terminal = &term;
     // The program behind the screen: a plain POSIX shell on a pty. busybox
     // ash is the initramfs citizen; /bin/sh is the same citizen on a dev

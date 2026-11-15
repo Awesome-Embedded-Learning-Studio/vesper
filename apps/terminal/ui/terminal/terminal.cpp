@@ -15,6 +15,7 @@
 #include "visor/bindings/events/key_words.hpp"
 #include "visor/bindings/events/modifiers.hpp"
 #include "visor/canvas/color.hpp"
+#include "visor/base/text/utf8.hpp"
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/painter.hpp"
 #include "visor/ui/text.hpp"
@@ -22,6 +23,12 @@
 
 namespace vesper::desktop {
 namespace {
+
+// Marks the tail half of a wide glyph's pair: beyond Unicode's ceiling, so
+// no real codepoint can collide with it.
+constexpr char32_t kWideCont = 0x110000UL;
+
+constexpr char32_t kSpace = U' ';
 
 // The xterm sixteen, verbatim values: the classic SGR palette every
 // colored program on this machine already speaks. Index 0..7 the dim
@@ -75,8 +82,9 @@ namespace {
 
 } // namespace
 
-Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font) noexcept
-    : Widget{bounds}, font_{font} {
+Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font,
+                   const visor::draw::MonoFont* wide_font) noexcept
+    : Widget{bounds}, font_{font}, wide_font_{wide_font} {
     // The cell is the font's own measure: the widest advance any glyph
     // carries (a strip-cut font bakes its gap into one uniform advance) and
     // the line height. A font with no glyphs at all still gets a 1x1 cell
@@ -87,7 +95,7 @@ Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font) noexcept
     cell_h_ = std::max(1, static_cast<int>(font_.line_height));
     cols_ = std::max(bounds.size.w / cell_w_, 1);
     rows_ = std::max(bounds.size.h / cell_h_, 1);
-    cells_.assign(cell_index(cols_ - 1, rows_ - 1) + 1, ' ');
+    cells_.assign(cell_index(cols_ - 1, rows_ - 1) + 1, kSpace);
     attrs_.assign(cells_.size(), CellAttr{});
 }
 
@@ -113,7 +121,7 @@ std::size_t Terminal::cell_index(int col, int row) const noexcept {
            static_cast<std::size_t>(col);
 }
 
-char Terminal::cell(int col, int row) const noexcept {
+char32_t Terminal::cell(int col, int row) const noexcept {
     return cells_[cell_index(col, row)];
 }
 
@@ -169,7 +177,7 @@ void Terminal::receive(std::string_view bytes) noexcept {
             if (cursor_col_ > 0) {
                 --cursor_col_;
             }
-            cells_[cell_index(cursor_col_, cursor_row_)] = ' ';
+            cells_[cell_index(cursor_col_, cursor_row_)] = kSpace;
             attrs_[cell_index(cursor_col_, cursor_row_)] = CellAttr{};
         } else if (byte == '\n') {
             // One byte, the plain-echo pair: next row, pen at the line start.
@@ -183,6 +191,35 @@ void Terminal::receive(std::string_view bytes) noexcept {
             cursor_col_ = std::min(next_stop, cols_ - 1);
         } else if (byte >= 0x20 && byte <= 0x7e) {
             put(byte);
+        } else if (byte >= 0x80) {
+            // UTF-8 walks in byte by byte: the first byte announces how
+            // many the sequence wants, the tail bytes fill it, and the
+            // finished codepoint lands as one cell (a wide one, when the
+            // companion font carries it). A broken lead byte resets the
+            // walk and is dropped.
+            if (utf8_need_ == 0) {
+                if (byte >= 0xC2 && byte <= 0xDF) {
+                    utf8_need_ = 2;
+                } else if (byte >= 0xE0 && byte <= 0xEF) {
+                    utf8_need_ = 3;
+                } else if (byte >= 0xF0 && byte <= 0xF4) {
+                    utf8_need_ = 4;
+                } else {
+                    utf8_pending_.clear();
+                    continue;
+                }
+                utf8_pending_.clear();
+            }
+            utf8_pending_.push_back(static_cast<char>(byte));
+            if (static_cast<int>(utf8_pending_.size()) == utf8_need_) {
+                std::size_t pos = 0;
+                const auto codepoint = visor::base::text::decode_utf8_next(utf8_pending_, pos);
+                utf8_need_    = 0;
+                utf8_pending_.clear();
+                if (codepoint.has_value()) {
+                    put(*codepoint);
+                }
+            }
         }
         // The remaining control bytes (bell and company) are not this
         // screen's business.
@@ -200,7 +237,7 @@ void Terminal::erase_cells(int col_from, int col_to, int row) noexcept {
         // Erase takes the dress with the glyph: a cleared screen owes no
         // stray palette corners, and repaint-from-scratch apps (the CSI 2J
         // crowd) start from the screen's own default again.
-        cells_[cell_index(col, row)] = ' ';
+        cells_[cell_index(col, row)] = kSpace;
         attrs_[cell_index(col, row)] = CellAttr{};
     }
 }
@@ -347,10 +384,25 @@ void Terminal::on_key_down(std::uint32_t code, visor::host::Modifiers modifiers)
     source_->send(std::string_view{&byte, 1});
 }
 
-void Terminal::put(unsigned char byte) noexcept {
-    cells_[cell_index(cursor_col_, cursor_row_)] = static_cast<char>(byte);
-    attrs_[cell_index(cursor_col_, cursor_row_)] = style_;
+void Terminal::put(char32_t codepoint) noexcept {
+    // The companion font's glyphs are two columns wide: a pair needs both
+    // columns on the current line, so a pair arriving at the edge wraps
+    // before painting rather than clipping its tail.
+    const bool wide = wide_font_ != nullptr && wide_font_->glyph(codepoint) != nullptr;
+    if (wide && cursor_col_ + 2 > cols_) {
+        cursor_col_ = 0;
+        newline();
+    }
+    const std::size_t at = cell_index(cursor_col_, cursor_row_);
+    cells_[at] = codepoint;
+    attrs_[at] = style_;
     ++cursor_col_;
+    if (wide) {
+        const std::size_t tail = cell_index(cursor_col_, cursor_row_);
+        cells_[tail] = kWideCont;
+        attrs_[tail] = CellAttr{};
+        ++cursor_col_;
+    }
     if (cursor_col_ == cols_) {
         cursor_col_ = 0;
         newline();
@@ -363,7 +415,7 @@ void Terminal::newline() noexcept {
         // and the newcomer scrolls in at the bottom.
         const auto line = static_cast<std::size_t>(cols_);
         std::copy(cells_.begin() + static_cast<std::ptrdiff_t>(line), cells_.end(), cells_.begin());
-        std::fill(cells_.end() - static_cast<std::ptrdiff_t>(line), cells_.end(), ' ');
+        std::fill(cells_.end() - static_cast<std::ptrdiff_t>(line), cells_.end(), kSpace);
         std::copy(attrs_.begin() + static_cast<std::ptrdiff_t>(line), attrs_.end(), attrs_.begin());
         std::fill(attrs_.end() - static_cast<std::ptrdiff_t>(line), attrs_.end(), CellAttr{});
         return;
@@ -392,16 +444,49 @@ void Terminal::on_draw(const visor::ui::Painter& painter) const noexcept {
                 };
                 painter.fill(cell_rect, kSgrPalette[attr.bg - 1]);
             }
-            if (cells_[index] == ' ') {
+            const char32_t codepoint = cells_[index];
+            if (codepoint == kSpace || codepoint == kWideCont) {
+                // Blanks paint nothing, and a wide glyph's tail half is
+                // already covered by the head.
                 continue;
             }
-            if (attr.fg != 0) {
-                visor::ui::draw_text_clipped(painter, bounds(), pos, font_,
-                                             std::string_view{&cells_[index], 1},
-                                             kSgrPalette[attr.fg - 1], 1);
+            // The base font answers first; the CJK companion carries what
+            // it does not. Either way the glyph paints at this cell's own
+            // origin -- a wide glyph's bitmap spans its pair, a missing
+            // glyph paints nothing, per the one-glyph-per-cell rule above.
+            const visor::draw::MonoFont* chosen = &font_;
+            if (font_.glyph(codepoint) == nullptr && wide_font_ != nullptr &&
+                wide_font_->glyph(codepoint) != nullptr) {
+                chosen = wide_font_;
+            }
+            std::array<char, 4> encoded{};
+            std::size_t encoded_len = 0;
+            if (codepoint <= 0x7F) {
+                encoded[0]   = static_cast<char>(codepoint);
+                encoded_len = 1;
+            } else if (codepoint <= 0x7FF) {
+                encoded[0] = static_cast<char>(0xC0 | (codepoint >> 6));
+                encoded[1] = static_cast<char>(0x80 | (codepoint & 0x3F));
+                encoded_len = 2;
+            } else if (codepoint <= 0xFFFF) {
+                encoded[0] = static_cast<char>(0xE0 | (codepoint >> 12));
+                encoded[1] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+                encoded[2] = static_cast<char>(0x80 | (codepoint & 0x3F));
+                encoded_len = 3;
             } else {
-                visor::ui::draw_text_clipped(painter, bounds(), pos, font_,
-                                             std::string_view{&cells_[index], 1},
+                encoded[0] = static_cast<char>(0xF0 | (codepoint >> 18));
+                encoded[1] = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+                encoded[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+                encoded[3] = static_cast<char>(0x80 | (codepoint & 0x3F));
+                encoded_len = 4;
+            }
+            const std::string_view encoded_view{encoded.data(), encoded_len};
+            if (attr.fg != 0) {
+                visor::ui::draw_text_clipped(painter, bounds(), pos, *chosen,
+                                             encoded_view, kSgrPalette[attr.fg - 1], 1);
+            } else {
+                visor::ui::draw_text_clipped(painter, bounds(), pos, *chosen,
+                                             encoded_view,
                                              visor::canvas::ColorRole::Background, 1);
             }
         }

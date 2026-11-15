@@ -24,6 +24,7 @@
 // the sparring partner draw.
 // NOLINTBEGIN(misc-include-cleaner)
 
+#include "fonts/han16.hpp"
 #include "fonts/term_font.hpp"
 #include "host/keymap.hpp"
 #include "host/pty.hpp"
@@ -56,6 +57,15 @@ namespace {
 // The classic grid every terminal program assumes before it learns better.
 constexpr int kCols = 80;
 constexpr int kRows = 24;
+
+// The terminal's CJK companion: a MonoFont view over the generated han16
+// header, consulted when the ASCII font has no glyph. Its 16px glyphs span
+// two cells of the 8px grid; the grid's own metrics stay the ASCII font's.
+const visor::draw::MonoFont kWideFont{
+    .line_height = visor::assets::han16::kLineHeight,
+    .glyphs = visor::assets::han16::kGlyphs,
+    .bits = visor::assets::han16::kBits,
+};
 
 // The cell is the font's own measure, the same walk the grid's constructor
 // takes: the widest advance and the line height, folded to compile time so
@@ -370,7 +380,7 @@ void rebuild(Guest& guest, std::optional<vesper::desktop::Terminal>& term,
     term.emplace(
         visor::base::RectI{.pos = visor::base::PointI{0, 0},
                            .size = visor::base::SizeI{.w = guest.face_w, .h = guest.face_h}},
-        vesper::fonts::term_font::kTermFont);
+        vesper::fonts::term_font::kTermFont, &kWideFont);
     static_cast<void>(session.set_winsize(cols, rows));
     source.emplace(*term, session);
     term->set_source(&*source);
@@ -472,7 +482,7 @@ int main(int argc, char* argv[]) { // NOLINT(misc-const-correctness)
     }
     // The line editor behind the screen redraws against the grid's own
     // cell count, never a guessed default.
-    term.emplace(kScreenBounds, vesper::fonts::term_font::kTermFont);
+    term.emplace(kScreenBounds, vesper::fonts::term_font::kTermFont, &kWideFont);
     static_cast<void>(session->set_winsize(term->cols(), term->rows()));
     source.emplace(*term, *session);
     term->set_source(&*source);

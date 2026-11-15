@@ -3,6 +3,7 @@
 
 #include "fake_color_host.hpp"
 #include "fonts/demo_font.hpp"
+#include "fonts/han16.hpp"
 #include "host/fake_session_host.hpp"
 #include "ui/desktop/desktop.hpp"
 #include "ui/style/theme.hpp"
@@ -116,26 +117,61 @@ void run_terminal_tests() {
         VESPER_CHECK_EQ(term.rows(), 25);
         VESPER_CHECK_EQ(term.cursor_col(), 0);
         VESPER_CHECK_EQ(term.cursor_row(), 0);
-        VESPER_CHECK_EQ(term.cell(0, 0), ' ');
-        VESPER_CHECK_EQ(term.cell(79, 24), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 0), U' ');
+        VESPER_CHECK_EQ(term.cell(79, 24), U' ');
     }
 
     // receive() semantics on the small grid: printable lands and steps.
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("AB");
-        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
-        VESPER_CHECK_EQ(term.cell(1, 0), 'B');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'A');
+        VESPER_CHECK_EQ(term.cell(1, 0), U'B');
         VESPER_CHECK_EQ(term.cursor_col(), 2);
         VESPER_CHECK_EQ(term.cursor_row(), 0);
+    }
+
+    // UTF-8: one codepoint per cell, and a codepoint the companion font
+    // carries takes both columns of its wide pair. The demo font has no
+    // hanzi, so this also proves the codepoint -- not the bytes -- is what
+    // the grid keeps.
+    {
+        const visor::draw::MonoFont kHan{
+            .line_height = visor::assets::han16::kLineHeight,
+            .glyphs = visor::assets::han16::kGlyphs,
+            .bits = visor::assets::han16::kBits,
+        };
+        Terminal term{kFullTerm, vesper::fonts::kDemoFont, &kHan};
+        term.receive("\xE4\xBD\xA0\xE5\xA5\xBD");  // U+4F60 U+597D
+        VESPER_CHECK_EQ(term.cell(0, 0), U'\u4F60');
+        VESPER_CHECK_EQ(term.cell(2, 0), U'\u597D');
+        VESPER_CHECK_EQ(term.cursor_col(), 4);
+    }
+
+    // Without a companion font the same bytes still fold to one codepoint
+    // in one cell: the grid never stores a UTF-8 byte.
+    {
+        Terminal term{kFullTerm, vesper::fonts::kDemoFont};
+        term.receive("\xE4\xBD\xA0");
+        VESPER_CHECK_EQ(term.cell(0, 0), U'\u4F60');
+        VESPER_CHECK_EQ(term.cursor_col(), 1);
+    }
+
+    // A lead byte that announces a sequence the walk never finishes must not
+    // swallow the next character.
+    {
+        Terminal term{kFullTerm, vesper::fonts::kDemoFont};
+        term.receive("\xE4" "A");
+        VESPER_CHECK_EQ(term.cell(0, 0), U'A');
+        VESPER_CHECK_EQ(term.cursor_col(), 1);
     }
 
     // Wrap: the fifth column of a 4-column grid lands on the next row.
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("ABCDE");
-        VESPER_CHECK_EQ(term.cell(3, 0), 'D');
-        VESPER_CHECK_EQ(term.cell(0, 1), 'E');
+        VESPER_CHECK_EQ(term.cell(3, 0), U'D');
+        VESPER_CHECK_EQ(term.cell(0, 1), U'E');
         VESPER_CHECK_EQ(term.cursor_col(), 1);
         VESPER_CHECK_EQ(term.cursor_row(), 1);
     }
@@ -144,33 +180,33 @@ void run_terminal_tests() {
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("AB\nC");
-        VESPER_CHECK_EQ(term.cell(0, 1), 'C');
+        VESPER_CHECK_EQ(term.cell(0, 1), U'C');
         VESPER_CHECK_EQ(term.cursor_col(), 1);
         VESPER_CHECK_EQ(term.cursor_row(), 1);
         term.receive("\rD");
-        VESPER_CHECK_EQ(term.cell(0, 1), 'D');
-        VESPER_CHECK_EQ(term.cell(1, 1), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 1), U'D');
+        VESPER_CHECK_EQ(term.cell(1, 1), U' ');
     }
 
     // Backspace steps back and blanks; at a line start it stays put.
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("AB\b");
-        VESPER_CHECK_EQ(term.cell(1, 0), ' ');
-        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
+        VESPER_CHECK_EQ(term.cell(1, 0), U' ');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'A');
         VESPER_CHECK_EQ(term.cursor_col(), 1);
         term.receive("\b\b\b");
         VESPER_CHECK_EQ(term.cursor_col(), 0);
-        VESPER_CHECK_EQ(term.cell(0, 0), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 0), U' ');
     }
 
     // Scroll: a fourth line on a 3-line grid pushes the first one off.
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("1\n2\n3\n4");
-        VESPER_CHECK_EQ(term.cell(0, 0), '2');
-        VESPER_CHECK_EQ(term.cell(0, 1), '3');
-        VESPER_CHECK_EQ(term.cell(0, 2), '4');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'2');
+        VESPER_CHECK_EQ(term.cell(0, 1), U'3');
+        VESPER_CHECK_EQ(term.cell(0, 2), U'4');
         VESPER_CHECK_EQ(term.cursor_col(), 1);
         VESPER_CHECK_EQ(term.cursor_row(), 2);
     }
@@ -186,8 +222,8 @@ void run_terminal_tests() {
         visor::ui::InputRouter input;
         visor::ui::dispatch_event(term, input, visor::host::Event{KeyDown{.code = 'h'}}, 0, false);
         visor::ui::dispatch_event(term, input, visor::host::Event{KeyDown{.code = 'i'}}, 0, false);
-        VESPER_CHECK_EQ(term.cell(0, 0), 'h');
-        VESPER_CHECK_EQ(term.cell(1, 0), 'i');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'h');
+        VESPER_CHECK_EQ(term.cell(1, 0), U'i');
         VESPER_CHECK_EQ(term.cursor_col(), 2);
         VESPER_CHECK_EQ(term.cursor_row(), 0);
 
@@ -207,7 +243,7 @@ void run_terminal_tests() {
         // screen reads both.
         visor::ui::dispatch_event(
             term, input, visor::host::Event{KeyDown{.code = visor::host::kKeySpace}}, 0, false);
-        VESPER_CHECK_EQ(term.cell(0, 1), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 1), U' ');
         VESPER_CHECK_EQ(term.cursor_col(), 1);
     }
 
@@ -215,7 +251,7 @@ void run_terminal_tests() {
     {
         Terminal term{kFullTerm, vesper::fonts::kDemoFont};
         term.on_key_down('h', visor::host::Modifiers{});
-        VESPER_CHECK_EQ(term.cell(0, 0), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 0), U' ');
         VESPER_CHECK_EQ(term.cursor_col(), 0);
     }
 
@@ -292,19 +328,19 @@ void run_terminal_tests() {
         term.receive("ABCD"); // fills row 0, cursor wraps to (0, 1)
         term.receive("XY");
         term.receive("\r\x1b[K"); // the prompt redraw: rewind, erase rest
-        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
-        VESPER_CHECK_EQ(term.cell(0, 1), ' ');
-        VESPER_CHECK_EQ(term.cell(1, 1), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'A');
+        VESPER_CHECK_EQ(term.cell(0, 1), U' ');
+        VESPER_CHECK_EQ(term.cell(1, 1), U' ');
         VESPER_CHECK_EQ(term.cursor_col(), 0);
         VESPER_CHECK_EQ(term.cursor_row(), 1);
         term.receive("\x1b[2;3H"); // 1-based row;column -> cell (2, 1)
         VESPER_CHECK_EQ(term.cursor_col(), 2);
         VESPER_CHECK_EQ(term.cursor_row(), 1);
         term.receive("Z");
-        VESPER_CHECK_EQ(term.cell(2, 1), 'Z');
+        VESPER_CHECK_EQ(term.cell(2, 1), U'Z');
         term.receive("\x1b[2J"); // everything blank, cursor stays
-        VESPER_CHECK_EQ(term.cell(0, 0), ' ');
-        VESPER_CHECK_EQ(term.cell(2, 1), ' ');
+        VESPER_CHECK_EQ(term.cell(0, 0), U' ');
+        VESPER_CHECK_EQ(term.cell(2, 1), U' ');
         VESPER_CHECK_EQ(term.cursor_col(), 3);
     }
 
@@ -341,12 +377,12 @@ void run_terminal_tests() {
         term.receive("\x1b[2C"); // skip "> "
         VESPER_CHECK_EQ(term.cursor_col(), 2);
         term.receive("\x1b[K");                // clear the word from the pen on
-        VESPER_CHECK_EQ(term.cell(0, 0), '>'); // the prompt survives
-        VESPER_CHECK_EQ(term.cell(1, 0), ' ');
-        VESPER_CHECK_EQ(term.cell(2, 0), ' '); // the old word is gone
+        VESPER_CHECK_EQ(term.cell(0, 0), U'>'); // the prompt survives
+        VESPER_CHECK_EQ(term.cell(1, 0), U' ');
+        VESPER_CHECK_EQ(term.cell(2, 0), U' '); // the old word is gone
         term.receive("ec");                    // the new word arrives
-        VESPER_CHECK_EQ(term.cell(2, 0), 'e');
-        VESPER_CHECK_EQ(term.cell(3, 0), 'c');
+        VESPER_CHECK_EQ(term.cell(2, 0), U'e');
+        VESPER_CHECK_EQ(term.cell(3, 0), U'c');
     }
 
     // A sequence split across two receive() calls still lands: the escape
@@ -354,10 +390,10 @@ void run_terminal_tests() {
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("AB\x1b[");
-        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'A');
         term.receive("K"); // the tail arrives, the erase happens
-        VESPER_CHECK_EQ(term.cell(1, 0), 'B');
-        VESPER_CHECK_EQ(term.cell(2, 0), ' ');
+        VESPER_CHECK_EQ(term.cell(1, 0), U'B');
+        VESPER_CHECK_EQ(term.cell(2, 0), U' ');
     }
 
     // Private sequences (bracketed paste, cursor modes) and unknown finals
@@ -365,18 +401,18 @@ void run_terminal_tests() {
     {
         Terminal term{kSmallTerm, vesper::fonts::kDemoFont};
         term.receive("\x1b[?2004hQ");
-        VESPER_CHECK_EQ(term.cell(0, 0), 'Q');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'Q');
         term.receive("\x1b[1mR"); // SGR is not this screen's business
-        VESPER_CHECK_EQ(term.cell(1, 0), 'R');
+        VESPER_CHECK_EQ(term.cell(1, 0), U'R');
     }
 
     // Tab stops every eight columns.
     {
         Terminal term{kFullTerm, vesper::fonts::kDemoFont};
         term.receive("A\tB");
-        VESPER_CHECK_EQ(term.cell(0, 0), 'A');
-        VESPER_CHECK_EQ(term.cell(7, 0), ' ');
-        VESPER_CHECK_EQ(term.cell(8, 0), 'B');
+        VESPER_CHECK_EQ(term.cell(0, 0), U'A');
+        VESPER_CHECK_EQ(term.cell(7, 0), U' ');
+        VESPER_CHECK_EQ(term.cell(8, 0), U'B');
         VESPER_CHECK_EQ(term.cursor_col(), 9);
     }
     // The caret on a color canvas: one cell of the scheme's accent, the

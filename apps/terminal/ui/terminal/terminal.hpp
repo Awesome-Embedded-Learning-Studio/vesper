@@ -8,6 +8,8 @@
 #include "visor/base/geometry/point.hpp"
 #include "visor/base/geometry/rect.hpp"
 #include "visor/bindings/events.hpp"
+#include <string>
+
 #include "visor/draw/mono_font.hpp"
 #include "visor/ui/widgets/widget.hpp"
 
@@ -66,7 +68,8 @@ class Terminal final : public visor::ui::Widget {
     /// bounds is the whole screen. A source is wired after construction, the
     /// same pattern Button's activation takes; an unwired screen drops
     /// keystrokes quietly, the stance an unwired dirty sink takes.
-    explicit Terminal(visor::base::RectI bounds, const visor::draw::MonoFont& font) noexcept;
+    explicit Terminal(visor::base::RectI bounds, const visor::draw::MonoFont& font,
+                      const visor::draw::MonoFont* wide_font = nullptr) noexcept;
 
     /// Wires the program behind the screen. Keystrokes before this call go
     /// nowhere.
@@ -84,7 +87,7 @@ class Terminal final : public visor::ui::Widget {
     [[nodiscard]] int rows() const noexcept { return rows_; }
     [[nodiscard]] int cursor_col() const noexcept { return cursor_col_; }
     [[nodiscard]] int cursor_row() const noexcept { return cursor_row_; }
-    [[nodiscard]] char cell(int col, int row) const noexcept;
+    [[nodiscard]] char32_t cell(int col, int row) const noexcept;
 
     /// Codes arrive per events.hpp's text-host convention: printable keys as
     /// code points (shift already folded in by the host), Enter and
@@ -123,20 +126,30 @@ class Terminal final : public visor::ui::Widget {
     /// The cells vector's index of one grid position.
     [[nodiscard]] std::size_t cell_index(int col, int row) const noexcept;
 
-    /// Lands one printable byte under the cursor and steps; the step wraps.
-    void put(unsigned char byte) noexcept;
+    /// Lands one printable codepoint under the cursor and steps; the step
+    /// wraps. A codepoint the wide font carries takes two columns: the glyph
+    /// paints across the pair, the tail cell holds the continuation mark so
+    /// every grid position stays addressable.
+    void put(char32_t codepoint) noexcept;
 
     /// Steps to the next row, scrolling the grid up when the cursor already
     /// sits on the last one.
     void newline() noexcept;
 
     visor::draw::MonoFont font_;
+    /// The CJK companion: consulted when the base font has no glyph for a
+    /// codepoint. Null keeps the screen ASCII-only, at today's metrics.
+    const visor::draw::MonoFont* wide_font_ = nullptr;
+    /// The UTF-8 walk's pending bytes and how many the first byte promised.
+    std::string utf8_pending_;
+    int utf8_need_ = 0;
     TerminalSource* source_ = nullptr;
     int cell_w_ = 1;
     int cell_h_ = 1;
     int cols_ = 0;
     int rows_ = 0;
-    std::vector<char> cells_;
+    /// One codepoint per cell; kWideCont marks the tail half of a wide pair.
+    std::vector<char32_t> cells_;
     std::vector<CellAttr> attrs_;
     int cursor_col_ = 0;
     int cursor_row_ = 0;
