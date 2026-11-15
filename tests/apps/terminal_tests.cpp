@@ -148,6 +148,42 @@ void run_terminal_tests() {
         VESPER_CHECK_EQ(term.cursor_col(), 4);
     }
 
+    // The paint judgment: a codepoint the companion font carries actually
+    // renders. The screen is an inverted box, so a glyph is a hole -- with
+    // the companion the first cell's band holds unlit pixels, and without
+    // it the very same codepoint leaves the band untouched (the caret has
+    // stepped past column zero by then).
+    {
+        const visor::draw::MonoFont kHan{
+            .line_height = visor::assets::han16::kLineHeight,
+            .glyphs = visor::assets::han16::kGlyphs,
+            .bits = visor::assets::han16::kBits,
+        };
+        const auto unlit_in_first_cell = [](Terminal& term) {
+            vesper::host::FakeSessionHost host{480, 320};
+            LoopbackSource loop{term};
+            term.set_source(&loop);
+            Frame frame;
+            visor::ui::render_window(term, frame, kScreenBounds, host.table());
+            int unlit = 0;
+            for (int y = 0; y < 16; ++y) {
+                for (int x = 0; x < 8; ++x) {
+                    if (!host.get(PointI{x, y})) {
+                        ++unlit;
+                    }
+                }
+            }
+            return unlit;
+        };
+        Terminal with_han{kFullTerm, vesper::fonts::kDemoFont, &kHan};
+        with_han.receive("\xE4\xBD\xA0");
+        VESPER_CHECK(unlit_in_first_cell(with_han) > 0);
+
+        Terminal ascii_only{kFullTerm, vesper::fonts::kDemoFont};
+        ascii_only.receive("\xE4\xBD\xA0");
+        VESPER_CHECK_EQ(unlit_in_first_cell(ascii_only), 0);
+    }
+
     // Without a companion font the same bytes still fold to one codepoint
     // in one cell: the grid never stores a UTF-8 byte.
     {
