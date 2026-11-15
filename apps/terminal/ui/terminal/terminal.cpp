@@ -84,7 +84,11 @@ namespace {
 
 Terminal::Terminal(RectI bounds, const visor::draw::MonoFont& font,
                    const visor::draw::MonoFont* wide_font) noexcept
-    : Widget{bounds}, font_{font}, wide_font_{wide_font} {
+    : Widget{bounds}, font_{font} {
+    // The companion becomes the base font's fallback: from here on the grid
+    // asks one font chain, and a codepoint resolves to the glyph and the
+    // bits that hold it without any second lookup written here.
+    font_.fallback = wide_font;
     // The cell is the font's own measure: the widest advance any glyph
     // carries (a strip-cut font bakes its gap into one uniform advance) and
     // the line height. A font with no glyphs at all still gets a 1x1 cell
@@ -388,7 +392,8 @@ void Terminal::put(char32_t codepoint) noexcept {
     // The companion font's glyphs are two columns wide: a pair needs both
     // columns on the current line, so a pair arriving at the edge wraps
     // before painting rather than clipping its tail.
-    const bool wide = wide_font_ != nullptr && wide_font_->glyph(codepoint) != nullptr;
+    const visor::draw::MonoFont* owner = &font_;
+    const bool wide = font_.resolve(codepoint, &owner) != nullptr && owner != &font_;
     if (wide && cursor_col_ + 2 > cols_) {
         cursor_col_ = 0;
         newline();
@@ -450,15 +455,11 @@ void Terminal::on_draw(const visor::ui::Painter& painter) const noexcept {
                 // already covered by the head.
                 continue;
             }
-            // The base font answers first; the CJK companion carries what
-            // it does not. Either way the glyph paints at this cell's own
-            // origin -- a wide glyph's bitmap spans its pair, a missing
-            // glyph paints nothing, per the one-glyph-per-cell rule above.
-            const visor::draw::MonoFont* chosen = &font_;
-            if (font_.glyph(codepoint) == nullptr && wide_font_ != nullptr &&
-                wide_font_->glyph(codepoint) != nullptr) {
-                chosen = wide_font_;
-            }
+            // One font chain: it answers with the glyph and the bits that
+            // hold it, so the walk below needs no lookup of its own. A
+            // missing glyph paints nothing, per the one-glyph-per-cell rule
+            // above.
+
             std::array<char, 4> encoded{};
             std::size_t encoded_len = 0;
             if (codepoint <= 0x7F) {
@@ -482,11 +483,10 @@ void Terminal::on_draw(const visor::ui::Painter& painter) const noexcept {
             }
             const std::string_view encoded_view{encoded.data(), encoded_len};
             if (attr.fg != 0) {
-                visor::ui::draw_text_clipped(painter, bounds(), pos, *chosen,
-                                             encoded_view, kSgrPalette[attr.fg - 1], 1);
+                visor::ui::draw_text_clipped(painter, bounds(), pos, font_, encoded_view,
+                                             kSgrPalette[attr.fg - 1], 1);
             } else {
-                visor::ui::draw_text_clipped(painter, bounds(), pos, *chosen,
-                                             encoded_view,
+                visor::ui::draw_text_clipped(painter, bounds(), pos, font_, encoded_view,
                                              visor::canvas::ColorRole::Background, 1);
             }
         }

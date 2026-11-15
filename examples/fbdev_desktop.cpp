@@ -308,14 +308,31 @@ int main(int argc, const char* const* argv) {
     std::println("vesper-fbdev: fb {}x{} (frame {}x{}), kbd {}, pointer {}", session.fb.width(),
                  session.fb.height(), screen.w, screen.h, kbd_path, pointer_path);
 
-    Desktop desktop{screen_bounds, "VESPER", vesper::fonts::title::kTitleFont, desk_theme};
-    const SizeI tag_size = measure_text(vesper::fonts::ui::kUiFont, "MONO 1", 1);
+    // The CJK companion every text lane on this desk shares: han16's 16px
+    // glyphs, consulted through MonoFont's fallback chain so titles, icon
+    // captions, panel text and the terminal all get one mechanism. The
+    // grid and bar metrics stay the Latin fonts'.
+    const visor::draw::MonoFont kWideFont{
+        .line_height = visor::assets::han16::kLineHeight,
+        .glyphs = visor::assets::han16::kGlyphs,
+        .bits = visor::assets::han16::kBits,
+    };
+    const auto with_han = [&kWideFont](const visor::draw::MonoFont& base) {
+        visor::draw::MonoFont font = base;
+        font.fallback = &kWideFont;
+        return font;
+    };
+    const visor::draw::MonoFont kTitleFont = with_han(vesper::fonts::title::kTitleFont);
+    const visor::draw::MonoFont kUiFont = with_han(vesper::fonts::ui::kUiFont);
+
+    Desktop desktop{screen_bounds, "VESPER", kTitleFont, desk_theme};
+    const SizeI tag_size = measure_text(kUiFont, "MONO 1", 1);
     const PointI tag_origin{
         screen.w - style::kContentPadding - tag_size.w,
         screen.h - style::kPanelHeight +
-            ((style::kPanelHeight - static_cast<int>(vesper::fonts::ui::kUiFont.line_height)) / 2),
+            ((style::kPanelHeight - static_cast<int>(kUiFont.line_height)) / 2),
     };
-    visor::ui::Label tag{tag_origin, "MONO 1", vesper::fonts::ui::kUiFont, ColorRole::Background};
+    visor::ui::Label tag{tag_origin, "MONO 1", kUiFont, ColorRole::Background};
 
     const RectI welcome_slot{
         .pos = PointI{16, 16},
@@ -351,25 +368,17 @@ int main(int argc, const char* const* argv) {
         };
         return layers;
     }();
-    Icon welcome_icon{welcome_slot, welcome_layers, "WELCOME", vesper::fonts::ui::kUiFont};
-    Icon term_icon{term_slot, term_layers, "TERMINAL", vesper::fonts::ui::kUiFont};
+    Icon welcome_icon{welcome_slot, welcome_layers, "WELCOME", kUiFont};
+    Icon term_icon{term_slot, term_layers, "TERMINAL", kUiFont};
 
     WelcomePanel welcome{RectI{.pos = PointI{180, 70}, .size = SizeI{.w = 230, .h = 100}},
-                         vesper::fonts::title::kTitleFont, vesper::fonts::ui::kUiFont};
+                         kTitleFont, kUiFont};
     WindowFrame welcome_win{RectI{.pos = PointI{160, 50}, .size = SizeI{.w = 270, .h = 130}},
-                            "About", vesper::fonts::title::kTitleFont, work_area};
+                            "About", kTitleFont, work_area};
     Opener welcome_opener{.win = &welcome_win};
 
     WindowFrame term_win{RectI{.pos = PointI{20, 40}, .size = SizeI{.w = 600, .h = 400}},
-                         "Terminal", vesper::fonts::title::kTitleFont, work_area};
-    // The CJK companion beside the ASCII font: han16's 16px glyphs take two
-    // columns of the 8px grid, and the grid's own metrics stay the ASCII
-    // font's so the desk's layout is unchanged.
-    const visor::draw::MonoFont kWideFont{
-        .line_height = visor::assets::han16::kLineHeight,
-        .glyphs = visor::assets::han16::kGlyphs,
-        .bits = visor::assets::han16::kBits,
-    };
+                         "Terminal", kTitleFont, work_area};
     Terminal term{term_win.content_area(), vesper::fonts::term_font::kTermFont, &kWideFont};
     session.terminal = &term;
     // The program behind the screen: a plain POSIX shell on a pty. busybox

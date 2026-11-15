@@ -3,6 +3,7 @@
 
 #include "fake_color_host.hpp"
 #include "fonts/demo_font.hpp"
+#include "fonts/han16.hpp"
 #include "host/fake_session_host.hpp"
 #include "ui/desktop/desktop.hpp"
 #include "ui/style/theme.hpp"
@@ -119,6 +120,45 @@ struct Scene {
 } // namespace
 
 void run_window_frame_tests() {
+    // The title bar walks the same font chain as everything else: a hanzi
+    // title paints only when the bar's font carries a companion. Same title,
+    // same geometry, one pointer of difference -- so the unlit count inside
+    // the band is the whole judgment.
+    {
+        const visor::draw::MonoFont kHan{
+            .line_height = visor::assets::han16::kLineHeight,
+            .glyphs = visor::assets::han16::kGlyphs,
+            .bits = visor::assets::han16::kBits,
+        };
+        const auto band_unlit = [](const visor::draw::MonoFont& title_font) {
+            FakeSessionHost host{480, 320};
+            Frame frame{};
+            Desktop desk{kScreenBounds, "VESPER", title_font, visor::ui::kLightTheme};
+            visor::ui::Label body{PointI{0, 0}, "HELLO", vesper::fonts::kDemoFont};
+            WindowFrame win{RectI{.pos = PointI{40, 50}, .size = SizeI{.w = 160, .h = 120}},
+                            "\xE7\xBB\x88", title_font, kScreenBounds};
+            VESPER_CHECK(win.initialize());
+            VESPER_CHECK(win.set_content(&body));
+            VESPER_CHECK(desk.add_child(&win));
+            visor::ui::render_window(desk, frame, kScreenBounds, host.table());
+            int unlit = 0;
+            const RectI band = win.title_bar();
+            for (int y = band.pos.y; y < band.pos.y + band.size.h; ++y) {
+                for (int x = band.pos.x; x < band.pos.x + band.size.w; ++x) {
+                    if (!host.get(PointI{x, y})) {
+                        ++unlit;
+                    }
+                }
+            }
+            return unlit;
+        };
+        visor::draw::MonoFont kWithHan = vesper::fonts::kDemoFont;
+        kWithHan.fallback = &kHan;
+        const int painted = band_unlit(kWithHan);
+        const int alone = band_unlit(vesper::fonts::kDemoFont);
+        VESPER_CHECK(painted > alone);
+    }
+
     // Drag judgment: press the band, wander off the window (capture keeps
     // the moves with the frame), come back, release. The grab offset rides
     // along: grabbing at (80, 55) on a frame at (40, 50) puts the frame's

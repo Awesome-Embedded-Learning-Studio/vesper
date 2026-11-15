@@ -137,9 +137,9 @@ class Terminal final : public visor::ui::Widget {
     void newline() noexcept;
 
     visor::draw::MonoFont font_;
-    /// The CJK companion: consulted when the base font has no glyph for a
-    /// codepoint. Null keeps the screen ASCII-only, at today's metrics.
-    const visor::draw::MonoFont* wide_font_ = nullptr;
+    /// The CJK companion rides inside font_.fallback; this copy of the
+    /// base font is what every draw walks, so the chain lives in one place.
+
     /// The UTF-8 walk's pending bytes and how many the first byte promised.
     std::string utf8_pending_;
     int utf8_need_ = 0;
