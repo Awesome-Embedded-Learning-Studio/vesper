@@ -1,3 +1,12 @@
 [submodule "third_party/visor"]
 	path = third_party/visor
 	url = https://github.com/Awesome-Embedded-Learning-Studio/visor
+[submodule "third_party/base/zlib"]
+	path = third_party/base/zlib
+	url = https://github.com/madler/zlib
+[submodule "third_party/images/libpng"]
+	path = third_party/images/libpng
+	url = https://github.com/pnggroup/libpng
+[submodule "third_party/images/libjpeg-turbo"]
+	path = third_party/images/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo

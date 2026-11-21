@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <span>
 #include <vector>
 
@@ -9,9 +10,9 @@
 
 namespace vesper::assets {
 
-/// What went wrong, for the caller's one line of diagnostics.
+/// Why decoding failed, for the caller's one line of diagnostics. Success is
+/// the expected's value, so there is no Ok member to keep in step.
 enum class PbmError : std::uint8_t {
-    Ok,
     BadMagic,   ///< not a P4 file
     BadHeader,  ///< dims missing, not numbers, or header not closed by one whitespace
     Truncated,  ///< header parsed, raster shorter than dims promise
@@ -27,8 +28,6 @@ enum class PbmError : std::uint8_t {
  * native dish.
  */
 struct PbmImage {
-    bool ok = false;
-    PbmError error = PbmError::BadMagic;
     std::size_t width = 0;
     std::size_t height = 0;
     std::vector<std::uint8_t> rows;
@@ -40,10 +39,11 @@ struct PbmImage {
     }
 };
 
-/// Decodes P4 bytes. Comments (# to end of line) are accepted anywhere the
-/// format's common header allows them. The raster must carry exactly the
-/// bytes the dims promise; trailing junk beyond it is ignored.
-[[nodiscard]] PbmImage decode_pbm(std::span<const std::uint8_t> bytes) noexcept;
+/// Decodes P4 bytes, or carries the PbmError saying why the bytes are not
+/// one. Comments (# to end of line) are accepted anywhere the format's
+/// common header allows them. The raster must carry exactly the bytes the
+/// dims promise; trailing junk beyond it is ignored.
+[[nodiscard]] std::expected<PbmImage, PbmError> decode_pbm(std::span<const std::uint8_t> bytes) noexcept;
 
 /// Reads one whole file as bytes; false on any open or read failure, leaving
 /// out empty. The desktop is a userland program and may touch the filesystem,
