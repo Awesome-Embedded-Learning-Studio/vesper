@@ -59,4 +59,14 @@ if(VESPER_WAYLAND_FOUND)
     target_compile_definitions(wl_block PRIVATE _GNU_SOURCE) # memfd_create
     target_link_libraries(wl_block PRIVATE PkgConfig::VESPER_WAYLAND_CLIENT
                                           vesper.wayland.protocol)
+
+    # The clipboard lane's two demo cars (A1's first riders): one process
+    # puts a word on the desk's selection when clicked, one takes it off.
+    # Run the pair beside the compositor example, one shell each:
+    #   WAYLAND_DISPLAY=<socket> clip_pair copy
+    #   WAYLAND_DISPLAY=<socket> clip_pair paste
+    add_executable(clip_pair clip_pair.cpp)
+    target_compile_definitions(clip_pair PRIVATE _GNU_SOURCE) # memfd_create
+    target_link_libraries(clip_pair PRIVATE PkgConfig::VESPER_WAYLAND_CLIENT
+                                            vesper.wayland.protocol)
 endif()

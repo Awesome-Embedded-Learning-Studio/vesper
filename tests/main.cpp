@@ -33,6 +33,7 @@ int main(int /*argc*/, char** argv) { // NOLINT(misc-const-correctness)
     run_compositor_surface_tests();
     run_compositor_shell_tests();
     run_compositor_seat_tests();
+    run_compositor_selection_tests();
     run_compositor_desk_tests();
     run_compositor_cadence_tests();
     run_compositor_xwayland_tests();

@@ -1,6 +1,7 @@
 #include "compositor/server.hpp"
 
 #include "compositor/seat.hpp"
+#include "compositor/selection.hpp"
 #include "compositor/shell.hpp"
 #include "compositor/shm.hpp"
 #include "compositor/surface.hpp"
@@ -26,12 +27,15 @@ namespace {
 // takes 5, the floor under the pointer's frame words the input chapter (C2)
 // plans to speak -- the heart itself binds no capabilities, the seat is a
 // named empty chair. xdg_wm_base stays at 1, the version every guest in the
-// ecosystem still accepts.
+// ecosystem still accepts. The data device manager speaks 1, where the
+// selection words are complete; the drag-and-drop action words of 2 and 3
+// arrive with the chapter that wires them (A1's later sibling).
 constexpr int kCompositorVersion = 4;
 constexpr int kShmVersion = 1;
 constexpr int kSeatVersion = 5;
 constexpr int kWmBaseVersion = 1;
 constexpr int kOutputVersion = 2;
+constexpr int kDataManagerVersion = 1;
 
 // The client tally, shared with the per-client tickets below: a private
 // nested Impl cannot be named from file-scope helpers, and the count is all
@@ -112,11 +116,13 @@ struct Server::Impl {
     wl_global* seat_global = nullptr;
     wl_global* wm_base = nullptr;
     wl_global* output = nullptr;
+    wl_global* data_device_manager = nullptr;
     Tally tally{};
     SurfaceBook surfaces{};
     ShellBook shells{};
     OutputExtent output_extent{};
     Seat seat;
+    Selection selection;
     std::uint32_t frame_ms = 0;
 };
 
@@ -142,8 +148,17 @@ Server::Server() noexcept {
                                       &impl_->shells, &bind_wm_base);
     impl_->output = wl_global_create(impl_->display, &wl_output_interface, kOutputVersion,
                                      &impl_->output_extent, &bind_output);
+    impl_->data_device_manager =
+        wl_global_create(impl_->display, &wl_data_device_manager_interface, kDataManagerVersion,
+                         &impl_->selection, &Selection::Wiring::bind);
+    // The selection's delivery follows the keyboard, so the seat names the
+    // client and the selection listens -- the one wire between them, set
+    // here while both are being born.
+    impl_->seat.set_keyboard_client_notifier(&Selection::Wiring::keyboard_client_moved,
+                                             &impl_->selection);
     if (impl_->compositor == nullptr || impl_->shm == nullptr || impl_->seat_global == nullptr ||
-        impl_->wm_base == nullptr || impl_->output == nullptr) {
+        impl_->wm_base == nullptr || impl_->output == nullptr ||
+        impl_->data_device_manager == nullptr) {
         // The globals own nothing yet, so refusing the whole display is the
         // only honest cleanup a half-built heart has.
         wl_display_destroy(impl_->display);

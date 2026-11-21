@@ -21,6 +21,7 @@ void run_compositor_shm_tests();
 void run_compositor_surface_tests();
 void run_compositor_shell_tests();
 void run_compositor_seat_tests();
+void run_compositor_selection_tests();
 void run_compositor_desk_tests();
 void run_compositor_cadence_tests();
 void run_compositor_xwayland_tests();

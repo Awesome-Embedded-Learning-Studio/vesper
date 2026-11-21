@@ -19,6 +19,7 @@ if(VESPER_COMPOSITOR_LANE)
     target_sources(vesper.tests PRIVATE compositor/server_tests.cpp compositor/sparring_client.cpp
                                         compositor/shm_tests.cpp compositor/surface_tests.cpp
                                         compositor/shell_tests.cpp compositor/seat_tests.cpp
+                                        compositor/selection_tests.cpp
                                         compositor/shell_desk_tests.cpp
                                         compositor/cadence_tests.cpp
                                         compositor/xwayland_tests.cpp
