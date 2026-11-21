@@ -1,4 +1,4 @@
-#include "base/libpbm/pbm.hpp"
+#include "base/images/libpbm/pbm.hpp"
 
 #include <array>
 #include <cctype>
@@ -51,48 +51,39 @@ void skip_blanks_and_comments(std::span<const std::uint8_t> bytes, std::size_t& 
 
 } // namespace
 
-PbmImage decode_pbm(std::span<const std::uint8_t> bytes) noexcept {
-    PbmImage image;
+std::expected<PbmImage, PbmError> decode_pbm(std::span<const std::uint8_t> bytes) noexcept {
     if (bytes.size() < 2 || bytes[0] != 'P' || bytes[1] != '4') {
-        image.error = PbmError::BadMagic;
-        return image;
+        return std::unexpected(PbmError::BadMagic);
     }
+    PbmImage image;
     bool absurd = false;
     std::size_t cursor = 2;
     skip_blanks_and_comments(bytes, cursor);
     if (!parse_dimension(bytes, cursor, image.width, absurd)) {
-        image.error = absurd ? PbmError::AbsurdDims : PbmError::BadHeader;
-        return image;
+        return std::unexpected(absurd ? PbmError::AbsurdDims : PbmError::BadHeader);
     }
     skip_blanks_and_comments(bytes, cursor);
     if (!parse_dimension(bytes, cursor, image.height, absurd)) {
-        image.error = absurd ? PbmError::AbsurdDims : PbmError::BadHeader;
-        return image;
+        return std::unexpected(absurd ? PbmError::AbsurdDims : PbmError::BadHeader);
     }
     if (image.width == 0 || image.height == 0) {
-        image.error = PbmError::AbsurdDims;
-        return image;
+        return std::unexpected(PbmError::AbsurdDims);
     }
     // Exactly one whitespace byte closes the header, then the raster starts.
     if (cursor >= bytes.size()) {
-        image.error = PbmError::Truncated;
-        return image;
+        return std::unexpected(PbmError::Truncated);
     }
     if (std::isspace(bytes[cursor]) == 0) {
-        image.error = PbmError::BadHeader;
-        return image;
+        return std::unexpected(PbmError::BadHeader);
     }
     ++cursor;
     const std::size_t stride = (image.width + 7) / 8;
     const std::size_t needed = stride * image.height;
     if (bytes.size() - cursor < needed) {
-        image.error = PbmError::Truncated;
-        return image;
+        return std::unexpected(PbmError::Truncated);
     }
     image.rows.assign(bytes.begin() + static_cast<std::ptrdiff_t>(cursor),
                       bytes.begin() + static_cast<std::ptrdiff_t>(cursor + needed));
-    image.error = PbmError::Ok;
-    image.ok = true;
     return image;
 }
 

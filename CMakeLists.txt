@@ -26,6 +26,10 @@ if(VESPER_BACKEND STREQUAL "all" OR VESPER_BACKEND STREQUAL "wayland")
     set(VESPER_COMPOSITOR_LANE ON)
 endif()
 
+# The third-party lane (zlib, libpng, libjpeg-turbo): static archives only,
+# built before the layers so the base's image module can link them.
+add_subdirectory(third_party)
+
 option(VESPER_SANITIZE "ASan+UBSan switch" OFF)
 option(VESPER_TSAN "TSan switch" OFF)
 
@@ -64,7 +68,7 @@ add_subdirectory(apps/terminal)
 # wires the machine.
 add_library(
     vesper.ui STATIC
-    src/base/libpbm/pbm.cpp
+    src/base/images/libpbm/pbm.cpp
     src/ui/desktop/desktop.cpp
     src/ui/icon/icon.cpp
     src/ui/launcher/launcher.cpp

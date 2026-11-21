@@ -2,7 +2,7 @@
 // X11. The acceptance builds it, the human runs it (a display is needed); a
 // double click on an icon opens that icon's window and lifts it to the top,
 // its X box hides it again, quitting is the window manager's X button.
-#include "base/libpbm/pbm.hpp"
+#include "base/images/libpbm/pbm.hpp"
 #include "fonts/term_font.hpp"
 #include "fonts/title_font.hpp"
 #include "fonts/ui_font.hpp"
@@ -37,6 +37,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <print>
 #include <utility>
 #include <vector>
@@ -170,7 +171,9 @@ int main(int argc, char** argv) {
 
     // Optional argv[1]: a P4 bitmap painted as the desk's picture. Declared
     // before the desktop because the wallpaper view borrows this storage.
-    vesper::assets::PbmImage wallpaper_image;
+    // std::optional, not the decode's expected: a missing argv[1] is absence,
+    // not a decode failure, and the expected is consumed right below.
+    std::optional<vesper::assets::PbmImage> wallpaper_image;
     visor::draw::MonoBitmap wallpaper_view{};
     if (argc > 1) {
         std::vector<std::uint8_t> bytes;
@@ -178,16 +181,17 @@ int main(int argc, char** argv) {
             std::println(stderr, "vesper: cannot read {}", argv[1]);
             return 1;
         }
-        wallpaper_image = vesper::assets::decode_pbm(bytes);
-        if (!wallpaper_image.ok) {
+        auto decoded = vesper::assets::decode_pbm(bytes);
+        if (!decoded) {
             std::println(stderr, "vesper: {} is not a valid P4 bitmap", argv[1]);
             return 1;
         }
-        wallpaper_view = wallpaper_image.bitmap();
+        wallpaper_image = std::move(decoded).value();
+        wallpaper_view = wallpaper_image->bitmap();
     }
 
     Desktop desktop{kScreenBounds, "VESPER", vesper::fonts::title::kTitleFont, desk_theme};
-    if (wallpaper_image.ok) {
+    if (wallpaper_image) {
         desktop.set_wallpaper(&wallpaper_view);
     }
     // The panel's right side: the scheme's name, the desk's identity tag.

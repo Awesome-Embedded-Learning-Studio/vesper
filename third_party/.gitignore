@@ -1,0 +1,7 @@
+*
+!.gitignore
+!/visor/
+!/images/
+!/images/**
+!/base/
+!/base/**
